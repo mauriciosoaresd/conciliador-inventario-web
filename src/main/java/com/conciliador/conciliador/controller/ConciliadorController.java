@@ -5,6 +5,7 @@ import com.conciliador.conciliador.model.ProdutoInventario;
 import com.conciliador.conciliador.model.ResultadoConciliacao;
 import com.conciliador.conciliador.service.CsvService;
 import com.conciliador.conciliador.service.ExcelService;
+import com.conciliador.conciliador.service.MatchUtils;
 import com.conciliador.conciliador.service.XmlService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.io.InputStreamResource;
@@ -20,8 +21,7 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.ByteArrayInputStream;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
-import java.util.stream.Collectors;
+import java.util.Set;
 
 @Controller
 public class ConciliadorController {
@@ -37,7 +37,7 @@ public class ConciliadorController {
 
     @GetMapping("/")
     public String index() {
-        return "index"; // Vai carregar o arquivo index.html na pasta templates
+        return "index";
     }
 
     @PostMapping("/conciliar")
@@ -45,10 +45,8 @@ public class ConciliadorController {
             @RequestParam("inventario") MultipartFile arquivoCsv,
             @RequestParam("xmls") List<MultipartFile> arquivosXml) {
         try {
-            // 1. Ler o Inventário Físico (CSV)
             List<ProdutoInventario> produtosInventario = csvService.lerCsv(arquivoCsv);
 
-            // 2. Ler todas as Notas Fiscais (XMLs)
             List<ItemNotaFiscal> itensNotas = new ArrayList<>();
             for (MultipartFile xml : arquivosXml) {
                 if (!xml.isEmpty()) {
@@ -56,29 +54,66 @@ public class ConciliadorController {
                 }
             }
 
-            // Mapear quantidades totais por código do produto na Nota Fiscal
-            Map<String, Double> somaNotasPorCodigo = itensNotas.stream()
-                    .collect(Collectors.groupingBy(
-                            ItemNotaFiscal::getCodigoProdutoFornecedor,
-                            Collectors.summingDouble(ItemNotaFiscal::getQuantidade)
-                    ));
-
-            // 3. Cruzamento / Motor de Conciliação
             List<ResultadoConciliacao> resultados = new ArrayList<>();
-            for (ProdutoInventario prod : produtosInventario) {
-                double qtdNota = somaNotasPorCodigo.getOrDefault(prod.getCodigo(), 0.0);
-                int qtdInventario = 1; // Cada linha do CSV costuma representar 1 item físico unitário ou ajuste
 
+            // Motor de Conciliação em Camadas Inteligente
+            for (ProdutoInventario prod : produtosInventario) {
+                ItemNotaFiscal itemMatch = null;
                 String status = "OK";
-                if (qtdInventario > qtdNota) {
-                    status = "DIVERGENTE - SOBRA";
-                } else if (qtdInventario < qtdNota) {
-                    status = "DIVERGENTE - FALTA";
+                double qtdNota = 0.0;
+                int qtdInventario = 1; // Padrão físico unitário do CSV
+
+                // CAMADA 1: Match exato por Código/SKU
+                for (ItemNotaFiscal item : itensNotas) {
+                    if (item.getCodigoProdutoFornecedor() != null &&
+                            item.getCodigoProdutoFornecedor().equalsIgnoreCase(prod.getCodigo())) {
+                        itemMatch = item;
+                        break;
+                    }
+                }
+
+                // CAMADA 2: Match por Similaridade de Descrição Normalizada (Fallback)
+                if (itemMatch == null) {
+                    String descInvNorm = MatchUtils.normalizar(prod.getDescricao());
+
+                    for (ItemNotaFiscal item : itensNotas) {
+                        String descNotaNorm = MatchUtils.normalizar(item.getDescricaoProduto());
+
+                        // Verifica se compartilham tokens relevantes (ex: "mesa", "switch", "notebook")
+                        if (temTokensComuns(descInvNorm, descNotaNorm)) {
+                            itemMatch = item;
+
+                            // CAMADA 3: Verificação Dinâmica de Ambiguidade de Medidas via Regex
+                            Set<String> dimensoesInventario = MatchUtils.extrairDimensoes(prod.getDescricao());
+                            Set<String> dimensoesNota = MatchUtils.extrairDimensoes(item.getDescricaoProduto());
+
+                            // Se ambos possuem dimensões descritas, mas elas diferem, marca para revisão manual
+                            if (!dimensoesInventario.isEmpty() && !dimensoesNota.isEmpty() && !dimensoesInventario.equals(dimensoesNota)) {
+                                status = "REVISÃO MANUAL - AMBIGUIDADE DE MEDIDA (Inv: " + dimensoesInventario + " vs NF: " + dimensoesNota + ")";
+                            }
+                            break;
+                        }
+                    }
+                }
+
+                // Definindo o Status final com base na quantidade
+                if (itemMatch != null) {
+                    qtdNota = itemMatch.getQuantidade();
+                    if (!status.startsWith("REVISÃO")) {
+                        if (qtdInventario > qtdNota) {
+                            status = "DIVERGENTE - SOBRA";
+                        } else if (qtdInventario < qtdNota) {
+                            status = "DIVERGENTE - FALTA";
+                        }
+                    }
+                } else {
+                    status = "NÃO ENCONTRADO NA NOTA FISCAL";
                 }
 
                 resultados.add(new ResultadoConciliacao(
                         prod.getCodigo(),
                         prod.getDescricao(),
+                        itemMatch != null ? itemMatch.getDescricaoProduto() : null,
                         prod.getEstado(),
                         qtdInventario,
                         qtdNota,
@@ -86,11 +121,10 @@ public class ConciliadorController {
                 ));
             }
 
-            // 4. Gerar Relatório Excel
             ByteArrayInputStream excelStream = excelService.gerarRelatorioExcel(resultados);
 
             HttpHeaders headers = new HttpHeaders();
-            headers.add("Content-Disposition", "attachment; filename=relatorio-conciliacao.xlsx");
+            headers.add("Content-Disposition", "attachment; filename=relatorio-conciliacao-inteligente.xlsx");
 
             return ResponseEntity.ok()
                     .headers(headers)
@@ -98,7 +132,17 @@ public class ConciliadorController {
                     .body(new InputStreamResource(excelStream));
 
         } catch (Exception e) {
-            throw new RuntimeException("Erro ao realizar a conciliação: " + e.getMessage(), e);
+            throw new RuntimeException("Erro ao realizar a conciliação inteligente: " + e.getMessage(), e);
         }
+    }
+
+    private boolean temTokensComuns(String desc1, String desc2) {
+        String[] palavras1 = desc1.split(" ");
+        for (String p : palavras1) {
+            if (p.length() > 3 && desc2.contains(p)) {
+                return true;
+            }
+        }
+        return false;
     }
 }
