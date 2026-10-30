@@ -15,18 +15,25 @@ public class ExcelService {
 
     public ByteArrayInputStream gerarRelatorioExcel(List<ResultadoConciliacao> resultados) {
         try (Workbook workbook = new XSSFWorkbook(); ByteArrayOutputStream out = new ByteArrayOutputStream()) {
-            Sheet sheet = workbook.createSheet("Conciliação de Inventário");
+            Sheet sheet = workbook.createSheet("Conciliação Inteligente");
 
-            // Estilo do Cabeçalho
+            // 1. Estilo do Cabeçalho
             CellStyle headerStyle = workbook.createCellStyle();
             Font headerFont = workbook.createFont();
             headerFont.setBold(true);
             headerStyle.setFont(headerFont);
             headerStyle.setFillForegroundColor(IndexedColors.GREY_25_PERCENT.getIndex());
             headerStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+            headerStyle.setAlignment(HorizontalAlignment.CENTER);
+
+            // Estilos condicionais para o Status
+            CellStyle styleOk = criarEstiloStatus(workbook, IndexedColors.LIGHT_GREEN);
+            CellStyle styleRevisao = criarEstiloStatus(workbook, IndexedColors.LIGHT_YELLOW);
+            CellStyle styleDivergente = criarEstiloStatus(workbook, IndexedColors.ROSE);
+            CellStyle styleNaoEncontrado = criarEstiloStatus(workbook, IndexedColors.GREY_40_PERCENT);
 
             // Linha de Cabeçalho
-            String[] colunas = {"Código", "Descrição", "Estado", "Qtd Inventário", "Qtd Nota Fiscal", "Status"};
+            String[] colunas = {"Código", "Descrição Inventário", "Descrição Nota Fiscal", "Estado", "Qtd Inventário", "Qtd Nota Fiscal", "Status"};
             Row headerRow = sheet.createRow(0);
             for (int i = 0; i < colunas.length; i++) {
                 Cell cell = headerRow.createCell(i);
@@ -34,19 +41,35 @@ public class ExcelService {
                 cell.setCellStyle(headerStyle);
             }
 
-            // Preenchendo os dados
+            // 2. Preenchendo os dados
             int rowIdx = 1;
             for (ResultadoConciliacao res : resultados) {
                 Row row = sheet.createRow(rowIdx++);
-                row.createCell(0).setCellValue(res.getCodigo());
-                row.createCell(1).setCellValue(res.getDescricao());
-                row.createCell(2).setCellValue(res.getEstado());
-                row.createCell(3).setCellValue(res.getQuantidadeInventario());
-                row.createCell(4).setCellValue(res.getQuantidadeNotaFiscal());
-                row.createCell(5).setCellValue(res.getStatus());
+
+                row.createCell(0).setCellValue(res.getCodigo() != null ? res.getCodigo() : "");
+                row.createCell(1).setCellValue(res.getDescricaoInventario() != null ? res.getDescricaoInventario() : "");
+                row.createCell(2).setCellValue(res.getDescricaoNotaFiscal() != null ? res.getDescricaoNotaFiscal() : "-");
+                row.createCell(3).setCellValue(res.getEstado() != null ? res.getEstado() : "");
+                row.createCell(4).setCellValue(res.getQuantidadeInventario());
+                row.createCell(5).setCellValue(res.getQuantidadeNotaFiscal());
+
+                // Célula de Status com formatação condicional baseada no texto
+                Cell statusCell = row.createCell(6);
+                String statusText = res.getStatus();
+                statusCell.setCellValue(statusText);
+
+                if (statusText.equals("OK")) {
+                    statusCell.setCellStyle(styleOk);
+                } else if (statusText.startsWith("REVISÃO")) {
+                    statusCell.setCellStyle(styleRevisao);
+                } else if (statusText.contains("DIVERGENTE")) {
+                    statusCell.setCellStyle(styleDivergente);
+                } else {
+                    statusCell.setCellStyle(styleNaoEncontrado);
+                }
             }
 
-            // Auto-ajustar largura das colunas
+            // 3. Auto-ajustar largura das colunas para legibilidade
             for (int i = 0; i < colunas.length; i++) {
                 sheet.autoSizeColumn(i);
             }
@@ -54,7 +77,19 @@ public class ExcelService {
             workbook.write(out);
             return new ByteArrayInputStream(out.toByteArray());
         } catch (IOException e) {
-            throw new RuntimeException("Erro ao gerar o relatório Excel: " + e.getMessage(), e);
+            throw new RuntimeException("Erro ao gerar o relatório Excel inteligente: " + e.getMessage(), e);
         }
+    }
+
+    // Auxiliar para criar estilos de cores nas células de status
+    private CellStyle criarEstiloStatus(Workbook workbook, IndexedColors corFundo) {
+        CellStyle style = workbook.createCellStyle();
+        style.setFillForegroundColor(corFundo.getIndex());
+        style.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+        Font font = workbook.createFont();
+        font.setBold(true);
+        style.setFont(font);
+        style.setAlignment(HorizontalAlignment.CENTER);
+        return style;
     }
 }

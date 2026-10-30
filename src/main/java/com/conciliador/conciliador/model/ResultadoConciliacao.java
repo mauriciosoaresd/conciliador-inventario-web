@@ -2,26 +2,42 @@ package com.conciliador.conciliador.model;
 
 public class ResultadoConciliacao {
     private String codigo;
-    private String descricao;
+    private String descricaoInventario;
+    private String descricaoNotaFiscal;
     private String estado;
     private int quantidadeInventario;
     private double quantidadeNotaFiscal;
-    private String status; // "OK", "DIVERGENTE - SOBRA", "DIVERGENTE - FALTA"
+    private String status;
 
-    public ResultadoConciliacao(String codigo, String descricao, String estado, int quantidadeInventario, double quantidadeNotaFiscal, String status) {
+    public ResultadoConciliacao(String codigo, String descricaoInventario, String descricaoNotaFiscal, String estado, int quantidadeInventario, double quantidadeNotaFiscal, String status) {
         this.codigo = codigo;
-        this.descricao = descricao;
+        this.descricaoInventario = descricaoInventario;
+        this.descricaoNotaFiscal = descricaoNotaFiscal;
         this.estado = estado;
         this.quantidadeInventario = quantidadeInventario;
         this.quantidadeNotaFiscal = quantidadeNotaFiscal;
         this.status = status;
     }
 
-    // Getters
+    // Getters e Setters
     public String getCodigo() { return codigo; }
-    public String getDescricao() { return descricao; }
+    public void setCodigo(String codigo) { this.codigo = codigo; }
+
+    public String getDescricaoInventario() { return descricaoInventario; }
+    public void setDescricaoInventario(String descricaoInventario) { this.descricaoInventario = descricaoInventario; }
+
+    public String getDescricaoNotaFiscal() { return descricaoNotaFiscal; }
+    public void setDescricaoNotaFiscal(String descricaoNotaFiscal) { this.descricaoNotaFiscal = descricaoNotaFiscal; }
+
     public String getEstado() { return estado; }
+    public void setEstado(String estado) { this.estado = estado; }
+
     public int getQuantidadeInventario() { return quantidadeInventario; }
+    public void setQuantidadeInventario(int quantidadeInventario) { this.quantidadeInventario = quantidadeInventario; }
+
     public double getQuantidadeNotaFiscal() { return quantidadeNotaFiscal; }
+    public void setQuantidadeNotaFiscal(double quantidadeNotaFiscal) { this.quantidadeNotaFiscal = quantidadeNotaFiscal; }
+
     public String getStatus() { return status; }
+    public void setStatus(String status) { this.status = status; }
 }
