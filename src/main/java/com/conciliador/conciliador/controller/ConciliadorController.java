@@ -56,7 +56,7 @@ public class ConciliadorController {
 
             List<ResultadoConciliacao> resultados = new ArrayList<>();
 
-            // Motor de Conciliação em Camadas Inteligente
+            // Motor de Conciliação em Camadas com Jaccard e Regex
             for (ProdutoInventario prod : produtosInventario) {
                 ItemNotaFiscal itemMatch = null;
                 String status = "OK";
@@ -72,26 +72,36 @@ public class ConciliadorController {
                     }
                 }
 
-                // CAMADA 2: Match por Similaridade de Descrição Normalizada (Fallback)
+                // CAMADA 2: Match por Similaridade Avançada (Índice de Jaccard >= 0.3)
                 if (itemMatch == null) {
                     String descInvNorm = MatchUtils.normalizar(prod.getDescricao());
+
+                    double maiorEscore = 0.0;
+                    ItemNotaFiscal melhorCandidato = null;
 
                     for (ItemNotaFiscal item : itensNotas) {
                         String descNotaNorm = MatchUtils.normalizar(item.getDescricaoProduto());
 
-                        // Verifica se compartilham tokens relevantes (ex: "mesa", "switch", "notebook")
-                        if (temTokensComuns(descInvNorm, descNotaNorm)) {
-                            itemMatch = item;
+                        // Calcula o grau de similaridade estatística entre as descrições
+                        double escore = MatchUtils.calcularSimilaridadeJaccard(descInvNorm, descNotaNorm);
 
-                            // CAMADA 3: Verificação Dinâmica de Ambiguidade de Medidas via Regex
-                            Set<String> dimensoesInventario = MatchUtils.extrairDimensoes(prod.getDescricao());
-                            Set<String> dimensoesNota = MatchUtils.extrairDimensoes(item.getDescricaoProduto());
+                        if (escore > maiorEscore) {
+                            maiorEscore = escore;
+                            melhorCandidato = item;
+                        }
+                    }
 
-                            // Se ambos possuem dimensões descritas, mas elas diferem, marca para revisão manual
-                            if (!dimensoesInventario.isEmpty() && !dimensoesNota.isEmpty() && !dimensoesInventario.equals(dimensoesNota)) {
-                                status = "REVISÃO MANUAL - AMBIGUIDADE DE MEDIDA (Inv: " + dimensoesInventario + " vs NF: " + dimensoesNota + ")";
-                            }
-                            break;
+                    // Se o escore de similaridade passar do limiar de segurança (30% de interseção de termos)
+                    if (maiorEscore >= 0.3 && melhorCandidato != null) {
+                        itemMatch = melhorCandidato;
+
+                        // CAMADA 3: Verificação Dinâmica de Ambiguidade de Medidas via Regex
+                        Set<String> dimensoesInventario = MatchUtils.extrairDimensoes(prod.getDescricao());
+                        Set<String> dimensoesNota = MatchUtils.extrairDimensoes(itemMatch.getDescricaoProduto());
+
+                        // Se ambos possuem dimensões descritas, mas elas diferem, marca para revisão manual
+                        if (!dimensoesInventario.isEmpty() && !dimensoesNota.isEmpty() && !dimensoesInventario.equals(dimensoesNota)) {
+                            status = "REVISÃO MANUAL - AMBIGUIDADE DE MEDIDA (Inv: " + dimensoesInventario + " vs NF: " + dimensoesNota + ")";
                         }
                     }
                 }
@@ -124,7 +134,7 @@ public class ConciliadorController {
             ByteArrayInputStream excelStream = excelService.gerarRelatorioExcel(resultados);
 
             HttpHeaders headers = new HttpHeaders();
-            headers.add("Content-Disposition", "attachment; filename=relatorio-conciliacao-inteligente.xlsx");
+            headers.add("Content-Disposition", "attachment; filename=relatorio-conciliacao-jaccard.xlsx");
 
             return ResponseEntity.ok()
                     .headers(headers)
@@ -132,17 +142,7 @@ public class ConciliadorController {
                     .body(new InputStreamResource(excelStream));
 
         } catch (Exception e) {
-            throw new RuntimeException("Erro ao realizar a conciliação inteligente: " + e.getMessage(), e);
+            throw new RuntimeException("Erro ao realizar a conciliação por Jaccard: " + e.getMessage(), e);
         }
-    }
-
-    private boolean temTokensComuns(String desc1, String desc2) {
-        String[] palavras1 = desc1.split(" ");
-        for (String p : palavras1) {
-            if (p.length() > 3 && desc2.contains(p)) {
-                return true;
-            }
-        }
-        return false;
     }
 }
