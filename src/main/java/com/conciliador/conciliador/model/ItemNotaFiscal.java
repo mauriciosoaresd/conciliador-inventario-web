@@ -1,0 +1,38 @@
+package com.conciliador.conciliador.model;
+
+public class ItemNotaFiscal {
+    private String cnpjEmitente;
+    private String numeroNota;
+    private String codigoProdutoFornecedor;
+    private String descricaoProduto;
+    private double quantidade;
+    private String unidadeMedida;
+    private double valorUnitario;
+
+    // Getters e Setters
+    public String getCnpjEmitente() { return cnpjEmitente; }
+    public void setCnpjEmitente(String cnpjEmitente) { this.cnpjEmitente = cnpjEmitente; }
+
+    public String getNumeroNota() { return numeroNota; }
+    public void setNumeroNota(String numeroNota) { this.numeroNota = numeroNota; }
+
+    public String getCodigoProdutoFornecedor() { return codigoProdutoFornecedor; }
+    public void setCodigoProdutoFornecedor(String codigoProdutoFornecedor) { this.codigoProdutoFornecedor = codigoProdutoFornecedor; }
+
+    public String getDescricaoProduto() { return descricaoProduto; }
+    public void setDescricaoProduto(String descricaoProduto) { this.descricaoProduto = descricaoProduto; }
+
+    public double getQuantidade() { return quantidade; }
+    public void setQuantidade(double quantidade) { this.quantidade = quantidade; }
+
+    public String getUnidadeMedida() { return unidadeMedida; }
+    public void setUnidadeMedida(String unidadeMedida) { this.unidadeMedida = unidadeMedida; }
+
+    public double getValorUnitario() { return valorUnitario; }
+    public void setValorUnitario(double valorUnitario) { this.valorUnitario = valorUnitario; }
+
+    @Override
+    public String toString() {
+        return "ItemNotaFiscal [NF=" + numeroNota + ", Descricao=" + descricaoProduto + ", Qtd=" + quantidade + "]";
+    }
+}
