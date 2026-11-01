@@ -4,6 +4,7 @@ import com.conciliador.conciliador.model.ItemNotaFiscal;
 import com.conciliador.conciliador.model.ProdutoInventario;
 import com.conciliador.conciliador.model.ResultadoConciliacao;
 import com.conciliador.conciliador.service.CsvService;
+import com.conciliador.conciliador.service.DocumentoParserService;
 import com.conciliador.conciliador.service.ExcelService;
 import com.conciliador.conciliador.service.MatchUtils;
 import com.conciliador.conciliador.service.XmlService;
@@ -33,6 +34,9 @@ public class ConciliadorController {
     private XmlService xmlService;
 
     @Autowired
+    private DocumentoParserService documentoParserService;
+
+    @Autowired
     private ExcelService excelService;
 
     @GetMapping("/")
@@ -43,14 +47,36 @@ public class ConciliadorController {
     @PostMapping("/conciliar")
     public ResponseEntity<InputStreamResource> conciliar(
             @RequestParam("inventario") MultipartFile arquivoCsv,
-            @RequestParam("xmls") List<MultipartFile> arquivosXml) {
+            @RequestParam("documentos") List<MultipartFile> arquivosDocumentos) {
         try {
             List<ProdutoInventario> produtosInventario = csvService.lerCsv(arquivoCsv);
 
             List<ItemNotaFiscal> itensNotas = new ArrayList<>();
-            for (MultipartFile xml : arquivosXml) {
-                if (!xml.isEmpty()) {
-                    itensNotas.addAll(xmlService.lerXml(xml));
+
+            for (MultipartFile doc : arquivosDocumentos) {
+                if (doc.isEmpty()) continue;
+
+                String nomeArquivo = doc.getOriginalFilename();
+                if (nomeArquivo != null && nomeArquivo.toLowerCase().endsWith(".xml")) {
+                    // Processamento padrão via XML estruturado
+                    itensNotas.addAll(xmlService.lerXml(doc));
+                } else {
+                    // Processamento via PDF ou Imagem com OCR/PDFBox
+                    String textoExtraido = documentoParserService.extrairTexto(doc);
+
+                    // Converte as linhas do texto extraído em itens de nota fiscal simulados
+                    // para que o motor de Jaccard consiga cruzar as descrições
+                    String[] linhas = textoExtraido.split("\n");
+                    for (String linha : linhas) {
+                        String linhaTrim = linha.trim();
+                        if (linhaTrim.length() > 3) { // Ignora linhas muito curtas/vazias
+                            ItemNotaFiscal itemOcr = new ItemNotaFiscal();
+                            itemOcr.setCodigoProdutoFornecedor("OCR-GENERIC");
+                            itemOcr.setDescricaoProduto(linhaTrim);
+                            itemOcr.setQuantidade(1.0); // Quantidade padrão unitária estimada
+                            itensNotas.add(itemOcr);
+                        }
+                    }
                 }
             }
 
@@ -61,7 +87,7 @@ public class ConciliadorController {
                 ItemNotaFiscal itemMatch = null;
                 String status = "OK";
                 double qtdNota = 0.0;
-                int qtdInventario = 1; // Padrão físico unitário do CSV
+                int qtdInventario = 1;
 
                 // CAMADA 1: Match exato por Código/SKU
                 for (ItemNotaFiscal item : itensNotas) {
@@ -81,8 +107,6 @@ public class ConciliadorController {
 
                     for (ItemNotaFiscal item : itensNotas) {
                         String descNotaNorm = MatchUtils.normalizar(item.getDescricaoProduto());
-
-                        // Calcula o grau de similaridade estatística entre as descrições
                         double escore = MatchUtils.calcularSimilaridadeJaccard(descInvNorm, descNotaNorm);
 
                         if (escore > maiorEscore) {
@@ -91,7 +115,6 @@ public class ConciliadorController {
                         }
                     }
 
-                    // Se o escore de similaridade passar do limiar de segurança (30% de interseção de termos)
                     if (maiorEscore >= 0.3 && melhorCandidato != null) {
                         itemMatch = melhorCandidato;
 
@@ -99,14 +122,12 @@ public class ConciliadorController {
                         Set<String> dimensoesInventario = MatchUtils.extrairDimensoes(prod.getDescricao());
                         Set<String> dimensoesNota = MatchUtils.extrairDimensoes(itemMatch.getDescricaoProduto());
 
-                        // Se ambos possuem dimensões descritas, mas elas diferem, marca para revisão manual
                         if (!dimensoesInventario.isEmpty() && !dimensoesNota.isEmpty() && !dimensoesInventario.equals(dimensoesNota)) {
                             status = "REVISÃO MANUAL - AMBIGUIDADE DE MEDIDA (Inv: " + dimensoesInventario + " vs NF: " + dimensoesNota + ")";
                         }
                     }
                 }
 
-                // Definindo o Status final com base na quantidade
                 if (itemMatch != null) {
                     qtdNota = itemMatch.getQuantidade();
                     if (!status.startsWith("REVISÃO")) {
@@ -117,7 +138,7 @@ public class ConciliadorController {
                         }
                     }
                 } else {
-                    status = "NÃO ENCONTRADO NA NOTA FISCAL";
+                    status = "NÃO ENCONTRADO NO DOCUMENTO";
                 }
 
                 resultados.add(new ResultadoConciliacao(
@@ -134,7 +155,7 @@ public class ConciliadorController {
             ByteArrayInputStream excelStream = excelService.gerarRelatorioExcel(resultados);
 
             HttpHeaders headers = new HttpHeaders();
-            headers.add("Content-Disposition", "attachment; filename=relatorio-conciliacao-jaccard.xlsx");
+            headers.add("Content-Disposition", "attachment; filename=relatorio-conciliacao-misto.xlsx");
 
             return ResponseEntity.ok()
                     .headers(headers)
@@ -142,7 +163,7 @@ public class ConciliadorController {
                     .body(new InputStreamResource(excelStream));
 
         } catch (Exception e) {
-            throw new RuntimeException("Erro ao realizar a conciliação por Jaccard: " + e.getMessage(), e);
+            throw new RuntimeException("Erro ao realizar a conciliação mista: " + e.getMessage(), e);
         }
     }
 }
