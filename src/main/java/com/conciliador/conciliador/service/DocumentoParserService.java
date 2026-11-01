@@ -3,10 +3,12 @@ package com.conciliador.conciliador.service;
 import net.sourceforge.tess4j.Tesseract;
 import org.apache.pdfbox.Loader;
 import org.apache.pdfbox.pdmodel.PDDocument;
+import org.apache.pdfbox.rendering.PDFRenderer;
 import org.apache.pdfbox.text.PDFTextStripper;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.awt.image.BufferedImage;
 import java.io.File;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -19,7 +21,6 @@ public class DocumentoParserService {
         if (nomeOriginal == null) return "";
 
         try {
-            // Cria um arquivo temporário para processamento
             Path tempFile = Files.createTempFile("upload-", nomeOriginal);
             arquivo.transferTo(tempFile.toFile());
             File file = tempFile.toFile();
@@ -27,16 +28,17 @@ public class DocumentoParserService {
             String textoExtraido = "";
 
             if (nomeOriginal.toLowerCase().endsWith(".pdf")) {
+                // 1. Tenta extração de texto digital direto com PDFBox
                 textoExtraido = extrairTextoDePdf(file);
-                // Se o PDF for escaneado (texto vazio), tenta OCR
+
+                // 2. Se o PDF for escaneado (texto vazio), renderiza as páginas como imagem e roda o OCR
                 if (textoExtraido.trim().isEmpty()) {
-                    textoExtraido = executarOcr(file);
+                    textoExtraido = executarOcrEmPdfScaneado(file);
                 }
             } else if (nomeOriginal.toLowerCase().matches(".*\\.(png|jpg|jpeg)$")) {
-                textoExtraido = executarOcr(file);
+                textoExtraido = executarOcrEmImagem(file);
             }
 
-            // Remove o arquivo temporário
             Files.deleteIfExists(tempFile);
             return textoExtraido;
 
@@ -54,15 +56,32 @@ public class DocumentoParserService {
         }
     }
 
-    private String executarOcr(File file) {
+    private String executarOcrEmPdfScaneado(File file) {
+        StringBuilder sb = new StringBuilder();
+        try (PDDocument document = Loader.loadPDF(file)) {
+            PDFRenderer pdfRenderer = new PDFRenderer(document);
+            Tesseract tesseract = new Tesseract();
+            tesseract.setLanguage("por"); // Define o idioma português
+
+            for (int i = 0; i < document.getNumberOfPages(); i++) {
+                // Renderiza a página do PDF em uma imagem a 300 DPI para alta qualidade de OCR
+                BufferedImage bim = pdfRenderer.renderImageWithDPI(i, 300);
+                String textoPagina = tesseract.doOCR(bim);
+                sb.append(textoPagina).append("\n");
+            }
+        } catch (Exception e) {
+            throw new RuntimeException("Erro ao renderizar PDF para OCR: " + e.getMessage(), e);
+        }
+        return sb.toString();
+    }
+
+    private String executarOcrEmImagem(File file) {
         try {
             Tesseract tesseract = new Tesseract();
-            // Opcional: aponte para o caminho dos dados de treinamento do Tesseract se necessário (ex: "tessdata")
-            // tesseract.setDatapath("/path/to/tessdata");
-            tesseract.setLanguage("por"); // Define o idioma português para melhor acurácia
+            tesseract.setLanguage("por");
             return tesseract.doOCR(file);
         } catch (Exception e) {
-            throw new RuntimeException("Erro ao executar OCR na imagem/PDF: " + e.getMessage(), e);
+            throw new RuntimeException("Erro ao executar OCR na imagem: " + e.getMessage(), e);
         }
     }
 }
