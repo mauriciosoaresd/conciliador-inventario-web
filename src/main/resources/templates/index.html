@@ -2,79 +2,90 @@
 <html xmlns:th="http://www.thymeleaf.org">
 <head>
     <meta charset="UTF-8">
-    <title>Conciliador Inteligente de Inventário e NF-e</title>
-    <!-- Tailwind CSS para um design limpo e corporativo -->
-    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <title>Conciliador de Inventário Inteligente</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 40px; background-color: #f4f6f9; }
+        .container { background: white; padding: 30px; border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); max-width: 600px; margin: auto; }
+        h2 { color: #333; }
+        .form-group { margin-bottom: 20px; }
+        label { display: block; margin-bottom: 8px; font-weight: bold; }
+        input[type="file"] { width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; }
+        button { background-color: #007bff; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; width: 100%; }
+        button:disabled { background-color: #cccccc; cursor: not-allowed; }
+        #loadingIndicator { display: none; text-align: center; margin-top: 15px; color: #007bff; font-weight: bold; }
+    </style>
 </head>
-<body class="bg-slate-50 min-h-screen flex flex-col justify-between font-sans text-slate-800">
+<body>
 
-<!-- Header -->
-<header class="bg-indigo-700 text-white shadow-md py-6 px-8">
-    <div class="max-w-4xl mx-auto flex justify-between items-center">
-        <h1 class="text-2xl font-bold tracking-tight">🏢 Conciliador Inteligente NF-e & Inventário</h1>
-        <span class="text-xs bg-indigo-600 px-3 py-1 rounded-full uppercase tracking-wider font-semibold">Java 21 | Spring Boot 4</span>
-    </div>
-</header>
+<div class="container">
+    <h2>Motor Híbrido de Conciliação</h2>
 
-<!-- Main Content -->
-<main class="max-w-4xl mx-auto px-4 py-12 flex-grow w-full">
-    <div class="bg-white rounded-2xl shadow-xl p-8 border border-slate-100">
-
-        <div class="mb-8 text-center">
-            <h2 class="text-xl font-bold text-slate-900 mb-2">Painel de Upload de Arquivos</h2>
-            <p class="text-sm text-slate-500">Envie a planilha de inventário (CSV) e as Notas Fiscais eletrônicas (XML) para iniciar a conciliação automática por Inteligência de Jaccard e Regex.</p>
+    <form id="formConciliacao" enctype="multipart/form-data">
+        <div class="form-group">
+            <label for="inventario">Planilha de Inventário (CSV):</label>
+            <input type="file" id="inventario" name="inventario" accept=".csv" required>
         </div>
 
-        <form th:action="@{/conciliar}" method="post" enctype="multipart/form-data" class="space-y-6" onsubmit="mostrarLoading()">
-
-            <!-- Upload Inventário CSV -->
-            <div class="p-5 bg-slate-50 rounded-xl border border-dashed border-slate-300 hover:border-indigo-500 transition-all">
-                <label class="block text-sm font-semibold text-slate-700 mb-2">📁 Planilha de Inventário (CSV)</label>
-                <input type="file" name="inventario" accept=".csv" required
-                       class="w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 cursor-pointer"/>
-            </div>
-
-            <!-- Upload Notas Fiscais (XML, PDF ou Imagem) -->
-            <div class="p-5 bg-slate-50 rounded-xl border border-dashed border-slate-300 hover:border-indigo-500 transition-all">
-                <label class="block text-sm font-semibold text-slate-700 mb-2">📄 Notas Fiscais (XML, PDF ou Imagens)</label>
-                <input type="file" name="documentos" accept=".xml,.pdf,.png,.jpg,.jpeg" multiple required
-                       class="w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 cursor-pointer"/>
-            </div>
-
-            <!-- Botão de Envio -->
-            <div>
-                <button type="submit" id="btnSubmit"
-                        class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-3.5 px-6 rounded-xl shadow-lg transition-all duration-200 flex justify-center items-center gap-2 cursor-pointer">
-                    <span>✨ Executar Conciliação Inteligente</span>
-                </button>
-            </div>
-        </form>
-
-        <!-- Loading Indicator (Oculto por padrão) -->
-        <div id="loadingIndicator" class="hidden mt-6 text-center space-y-3">
-            <div class="inline-block animate-spin rounded-full h-8 w-8 border-4 border-indigo-600 border-t-transparent"></div>
-            <p class="text-sm font-medium text-indigo-600">Processando e cruzando dados com inteligência artificial... O download do Excel começará em instantes.</p>
+        <div class="form-group">
+            <label for="documentos">Documentos Fiscais (XML, PDF ou Imagens):</label>
+            <input type="file" id="documentos" name="documentos" multiple accept=".xml,.pdf,.png,.jpg,.jpeg" required>
         </div>
 
-    </div>
-</main>
+        <button type="submit" id="btnProcessar">Executar Conciliação</button>
 
-<!-- Footer -->
-<footer class="bg-white border-t border-slate-200 py-4 text-center text-xs text-slate-400">
-    Desenvolvido com alta performance e confiabilidade — Spring Boot & Java 21.
-</footer>
+        <div id="loadingIndicator">⏳ Processando conciliação híbrida e gerando relatório... Por favor, aguarde.</div>
+    </form>
+</div>
 
-<!-- Script simples para feedback visual de carregamento -->
 <script>
-    function mostrarLoading() {
-        const btn = document.getElementById('btnSubmit');
-        const loading = document.getElementById('loadingIndicator');
+    document.getElementById("formConciliacao").addEventListener("submit", async function(event) {
+        event.preventDefault(); // Impede o comportamento padrão de submissão do formulário
 
-        btn.classList.add('opacity-50', 'cursor-not-allowed');
-        btn.disabled = true;
-        btn.innerHTML = 'Processando...';
-        loading.classList.remove('hidden');
-    }
+        const botao = document.getElementById("btnProcessar");
+        const loadingDiv = document.getElementById("loadingIndicator");
+
+        try {
+            // 1. Ativa o estado de carregamento e desativa o botão
+            botao.disabled = true;
+            botao.innerText = "Processando...";
+            loadingDiv.style.display = "block";
+
+            const formData = new FormData(this);
+
+            // 2. Envia os dados via Fetch API (assíncrono)
+            const response = await fetch('/conciliar', {
+                method: 'POST',
+                body: formData
+            });
+
+            if (!response.ok) {
+                throw new Error("Erro no servidor ao processar a conciliação.");
+            }
+
+            // 3. Recebe o blob do Excel gerado pelo backend
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+
+            // 4. Cria dinamicamente um link de download e dispara o clique automático
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = "relatorio-conciliacao-hibrido.xlsx";
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+
+            window.URL.revokeObjectURL(url);
+
+        } catch (error) {
+            alert("Ocorreu um erro: " + error.message);
+        } finally {
+            // 5. Restaura o botão e oculta o loading IMEDIATAMENTE após o download concluir
+            botao.disabled = false;
+            botao.innerText = "Executar Conciliação";
+            loadingDiv.style.display = "none";
+        }
+    });
 </script>
+
 </body>
 </html>
