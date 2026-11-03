@@ -9,30 +9,32 @@ class MatchUtilsTest {
 
     @Test
     void deveNormalizarTextoCorretamente() {
-        String texto = "  Mesa de Escritório 120x60cm  ";
-        String normalizado = MatchUtils.normalizar(texto);
-
-        assertTrue(normalizado.contains("mesa"));
-        assertTrue(normalizado.contains("120x60"));
+        String texto = "Cadeira de Escritório - 120x60cm!";
+        String resultado = MatchUtils.normalizar(texto);
+        assertEquals("cadeira de escritorio 120x60cm", resultado);
     }
 
     @Test
-    void deveAplicarSinonimosCorretamente() {
-        String texto = "Computador Portátil Core i5";
-        String normalizado = MatchUtils.normalizar(texto);
-
-        assertTrue(normalizado.contains("notebook"));
+    void deveAplicarStemmingCorretamente() {
+        assertEquals("computador", MatchUtils.aplicarStemming("computadores"));
+        assertEquals("cadeira", MatchUtils.aplicarStemming("cadeiras"));
     }
 
     @Test
-    void deveExtrairDimensoesDinamicamente() {
-        String texto1 = "Mesa 120x60";
-        String texto2 = "Mesa de centro 10x10cm";
+    void deveExtrairDimensoesCorretamente() {
+        Set<String> dimensoes = MatchUtils.extrairDimensoes("Mesa 120x60cm cor preta");
+        assertTrue(dimensoes.contains("120x60"));
+    }
 
-        Set<String> dim1 = MatchUtils.extrairDimensoes(texto1);
-        Set<String> dim2 = MatchUtils.extrairDimensoes(texto2);
+    @Test
+    void deveCalcularSimilaridadeJaccardComStemming() {
+        double escore = MatchUtils.calcularSimilaridadeJaccardComStemming("cadeira de escritorio", "cadeiras escritorio");
+        assertTrue(escore > 0.5, "O escore de Jaccard com stemming deve ser alto para termos parecidos.");
+    }
 
-        assertTrue(dim1.contains("120x60"));
-        assertTrue(dim2.contains("10x10"));
+    @Test
+    void deveCalcularSimilaridadeLevenshteinParaErrosDeDigitacao() {
+        double escore = MatchUtils.calcularSimilaridadeLevenshtein("notebook", "notbook");
+        assertTrue(escore > 0.8, "O escore de Levenshtein deve tolerar erros leves de digitação.");
     }
 }
