@@ -2,57 +2,218 @@
 <html xmlns:th="http://www.thymeleaf.org">
 <head>
     <meta charset="UTF-8">
-    <title>Conciliador de Inventário Inteligente</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Motor Híbrido de Conciliação | Inventário</title>
+    <!-- Google Fonts Inter -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
-        body { font-family: Arial, sans-serif; margin: 40px; background-color: #f4f6f9; }
-        .container { background: white; padding: 30px; border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); max-width: 600px; margin: auto; }
-        h2 { color: #333; }
-        .form-group { margin-bottom: 20px; }
-        label { display: block; margin-bottom: 8px; font-weight: bold; }
-        input[type="file"] { width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; }
-        button { background-color: #007bff; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; width: 100%; }
-        button:disabled { background-color: #cccccc; cursor: not-allowed; }
-        #loadingIndicator { display: none; text-align: center; margin-top: 15px; color: #007bff; font-weight: bold; }
+        :root {
+            --primary: #2563eb;
+            --primary-hover: #1d4ed8;
+            --bg-color: #f8fafc;
+            --card-bg: #ffffff;
+            --text-main: #1e293b;
+            --text-muted: #64748b;
+            --border-color: #e2e8f0;
+            --success: #10b981;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Inter', sans-serif;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            background-color: var(--card-bg);
+            width: 100%;
+            max-width: 540px;
+            padding: 40px;
+            border-radius: 16px;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.05);
+            border: 1px solid var(--border-color);
+        }
+
+        .header {
+            margin-bottom: 30px;
+            text-align: center;
+        }
+
+        .header h2 {
+            font-size: 24px;
+            font-weight: 700;
+            color: var(--text-main);
+            margin-bottom: 8px;
+        }
+
+        .header p {
+            font-size: 14px;
+            color: var(--text-muted);
+        }
+
+        .form-group {
+            margin-bottom: 24px;
+        }
+
+        label {
+            display: block;
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-main);
+            margin-bottom: 8px;
+        }
+
+        .file-drop-area {
+            border: 2px dashed var(--border-color);
+            border-radius: 10px;
+            padding: 16px;
+            text-align: center;
+            background-color: #f8fafc;
+            transition: all 0.3s ease;
+            position: relative;
+        }
+
+        .file-drop-area:hover {
+            border-color: var(--primary);
+            background-color: #eff6ff;
+        }
+
+        input[type="file"] {
+            width: 100%;
+            font-size: 13px;
+            color: var(--text-muted);
+            cursor: pointer;
+        }
+
+        input[type="file"]::file-selector-button {
+            background-color: #e2e8f0;
+            border: none;
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-weight: 500;
+            color: var(--text-main);
+            cursor: pointer;
+            margin-right: 12px;
+            transition: background 0.2s;
+        }
+
+        input[type="file"]::file-selector-button:hover {
+            background-color: #cbd5e1;
+        }
+
+        button {
+            background-color: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            padding: 14px 20px;
+            font-size: 15px;
+            font-weight: 600;
+            width: 100%;
+            cursor: pointer;
+            transition: background-color 0.2s, transform 0.1s;
+            box-shadow: 0 4px 6px -1px rgba(37, 99, 235, 0.2);
+        }
+
+        button:hover {
+            background-color: var(--primary-hover);
+        }
+
+        button:active {
+            transform: scale(0.99);
+        }
+
+        button:disabled {
+            background-color: #94a3b8;
+            cursor: not-allowed;
+            box-shadow: none;
+        }
+
+        #loadingIndicator {
+            display: none;
+            text-align: center;
+            margin-top: 20px;
+            font-size: 14px;
+            font-weight: 500;
+            color: var(--primary);
+            animation: pulse 1.5s infinite;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+
+        .footer-note {
+            margin-top: 25px;
+            text-align: center;
+            font-size: 12px;
+            color: var(--text-muted);
+            border-top: 1px solid var(--border-color);
+            padding-top: 15px;
+        }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <h2>Motor Híbrido de Conciliação</h2>
+    <div class="header">
+        <h2>Conciliação Inteligente</h2>
+        <p>Motor Híbrido com Stemming, Levenshtein e OCR</p>
+    </div>
 
     <form id="formConciliacao" enctype="multipart/form-data">
         <div class="form-group">
-            <label for="inventario">Planilha de Inventário (CSV):</label>
-            <input type="file" id="inventario" name="inventario" accept=".csv" required>
+            <label for="inventario">Planilha de Inventário (.CSV)</label>
+            <div class="file-drop-area">
+                <input type="file" id="inventario" name="inventario" accept=".csv" required>
+            </div>
         </div>
 
         <div class="form-group">
-            <label for="documentos">Documentos Fiscais (XML, PDF ou Imagens):</label>
-            <input type="file" id="documentos" name="documentos" multiple accept=".xml,.pdf,.png,.jpg,.jpeg" required>
+            <label for="documentos">Documentos Fiscais (XML, PDF ou Imagens)</label>
+            <div class="file-drop-area">
+                <input type="file" id="documentos" name="documentos" multiple accept=".xml,.pdf,.png,.jpg,.jpeg" required>
+            </div>
         </div>
 
         <button type="submit" id="btnProcessar">Executar Conciliação</button>
 
-        <div id="loadingIndicator">⏳ Processando conciliação híbrida e gerando relatório... Por favor, aguarde.</div>
+        <div id="loadingIndicator">⚡ A processar motor híbrido e a gerar relatório Excel...</div>
     </form>
+
+    <div class="footer-note">
+        Sistema Automatizado de Auditoria de Ativos &bull; Versão Corporativa
+    </div>
 </div>
 
 <script>
     document.getElementById("formConciliacao").addEventListener("submit", async function(event) {
-        event.preventDefault(); // Impede o comportamento padrão de submissão do formulário
+        event.preventDefault();
+        event.stopPropagation();
 
         const botao = document.getElementById("btnProcessar");
         const loadingDiv = document.getElementById("loadingIndicator");
 
-        try {
-            // 1. Ativa o estado de carregamento e desativa o botão
-            botao.disabled = true;
-            botao.innerText = "Processando...";
-            loadingDiv.style.display = "block";
+        botao.disabled = true;
+        botao.innerText = "A processar...";
+        loadingDiv.style.display = "block";
 
+        try {
             const formData = new FormData(this);
 
-            // 2. Envia os dados via Fetch API (assíncrono)
             const response = await fetch('/conciliar', {
                 method: 'POST',
                 body: formData
@@ -62,11 +223,9 @@
                 throw new Error("Erro no servidor ao processar a conciliação.");
             }
 
-            // 3. Recebe o blob do Excel gerado pelo backend
             const blob = await response.blob();
             const url = window.URL.createObjectURL(blob);
 
-            // 4. Cria dinamicamente um link de download e dispara o clique automático
             const a = document.createElement('a');
             a.href = url;
             a.download = "relatorio-conciliacao-hibrido.xlsx";
@@ -79,7 +238,6 @@
         } catch (error) {
             alert("Ocorreu um erro: " + error.message);
         } finally {
-            // 5. Restaura o botão e oculta o loading IMEDIATAMENTE após o download concluir
             botao.disabled = false;
             botao.innerText = "Executar Conciliação";
             loadingDiv.style.display = "none";
