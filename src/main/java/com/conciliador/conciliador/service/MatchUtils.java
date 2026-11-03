@@ -1,64 +1,48 @@
 package com.conciliador.conciliador.service;
 
+import org.apache.commons.text.similarity.LevenshteinDistance;
+
 import java.text.Normalizer;
-import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Map;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public class MatchUtils {
 
-    // Dicionário Ampliado de Sinônimos e Termos Comerciais Equivalentes
-    private static final Map<String, String> SINONIMOS = new HashMap<>();
-
-    static {
-        // Informática e Tecnologia
-        SINONIMOS.put("computador portatil", "notebook");
-        SINONIMOS.put("laptop", "notebook");
-        SINONIMOS.put("nbk", "notebook");
-        SINONIMOS.put("aio", "all in one");
-        SINONIMOS.put("computador all in one", "all in one");
-        SINONIMOS.put("cpu", "gabinete");
-        SINONIMOS.put("monitor led", "monitor");
-        SINONIMOS.put("monitor lcd", "monitor");
-        SINONIMOS.put("tela", "monitor");
-
-        // Mobiliário e Escritório
-        SINONIMOS.put("estante aco", "estante de ferro");
-        SINONIMOS.put("estante metalica", "estante de ferro");
-        SINONIMOS.put("mesa esc", "mesa de escritorio");
-        SINONIMOS.put("mesa trabalho", "mesa de escritorio");
-        SINONIMOS.put("cadeira giratoria", "cadeira de escritorio");
-        SINONIMOS.put("cadeira ergon", "cadeira de escritorio");
-    }
+    private static final LevenshteinDistance LEVENSHTEIN = new LevenshteinDistance();
 
     public static String normalizar(String texto) {
         if (texto == null) return "";
 
-        // 1. Remove acentos
         String nfd = Normalizer.normalize(texto, Normalizer.Form.NFD);
         String semAcentos = nfd.replaceAll("\\p{InCombiningDiacriticalMarks}+", "");
 
-        // 2. Converte para minúsculas e remove caracteres especiais (mantendo letras, números, ponto e o 'x' de dimensões)
-        String limpo = semAcentos.toLowerCase()
+        return semAcentos.toLowerCase()
                 .replaceAll("[^a-z0-9x.]", " ")
                 .replaceAll("\\s+", " ")
                 .trim();
-
-        // 3. Aplica sinônimos
-        for (Map.Entry<String, String> entry : SINONIMOS.entrySet()) {
-            if (limpo.contains(entry.getKey())) {
-                limpo = limpo.replace(entry.getKey(), entry.getValue());
-            }
-        }
-
-        return limpo;
     }
 
     /**
-     * Extrai dinamicamente qualquer padrão de dimensão no formato numérico X numérico (ex: 10x10, 120x60)
+     * Stemmer simples para português (remove plurais e radicais básicos)
+     */
+    public static String aplicarStemming(String palavra) {
+        if (palavra == null || palavra.length() <= 3) return palavra;
+
+        String p = palavra;
+        if (p.endsWith("es") && p.length() > 4) {
+            p = p.substring(0, p.length() - 2); // Ex: computadores -> computador
+        } else if (p.endsWith("s") && !p.endsWith("is") && p.length() > 3) {
+            p = p.substring(0, p.length() - 1); // Ex: cadeiras -> cadeira
+        } else if (p.endsWith("inh") && p.length() > 4) {
+            p = p.substring(0, p.length() - 3); // Ex: cadeirinha -> cadeir
+        }
+        return p;
+    }
+
+    /**
+     * Extrai dimensões no formato 10x10, 120x60
      */
     public static Set<String> extrairDimensoes(String texto) {
         Set<String> dimensoes = new HashSet<>();
@@ -70,42 +54,50 @@ public class MatchUtils {
         while (matcher.find()) {
             dimensoes.add(matcher.group().replaceAll("\\s+", "").toLowerCase());
         }
-
         return dimensoes;
     }
 
     /**
-     * Calcula o escore de similaridade por Índice de Jaccard entre duas descrições normalizadas (0.0 a 1.0)
+     * Jaccard Combinado com Stemming
      */
-    public static double calcularSimilaridadeJaccard(String desc1, String desc2) {
-        if (desc1 == null || desc2 == null || desc1.isEmpty() || desc2.isEmpty()) {
-            return 0.0;
-        }
+    public static double calcularSimilaridadeJaccardComStemming(String desc1, String desc2) {
+        if (desc1 == null || desc2 == null || desc1.isEmpty() || desc2.isEmpty()) return 0.0;
 
-        Set<String> set1 = new HashSet<>();
-        for (String palavra : desc1.split("\\s+")) {
-            if (palavra.length() > 2) { // Ignora preposições muito curtas ("de", "da", "em")
-                set1.add(palavra);
-            }
-        }
-
-        Set<String> set2 = new HashSet<>();
-        for (String palavra : desc2.split("\\s+")) {
-            if (palavra.length() > 2) {
-                set2.add(palavra);
-            }
-        }
+        Set<String> set1 = extrairTokensComStemming(desc1);
+        Set<String> set2 = extrairTokensComStemming(desc2);
 
         if (set1.isEmpty() || set2.isEmpty()) return 0.0;
 
-        // Intersecção (palavras comuns)
         Set<String> interseccao = new HashSet<>(set1);
         interseccao.retainAll(set2);
 
-        // União (todas as palavras únicas)
         Set<String> uniao = new HashSet<>(set1);
         uniao.addAll(set2);
 
         return (double) interseccao.size() / uniao.size();
+    }
+
+    /**
+     * Distância de Levenshtein normalizada (0.0 a 1.0) para tolerar erros leves de digitação
+     */
+    public static double calcularSimilaridadeLevenshtein(String str1, String str2) {
+        if (str1 == null || str2 == null) return 0.0;
+        if (str1.equalsIgnoreCase(str2)) return 1.0;
+
+        int distancia = LEVENSHTEIN.apply(str1, str2);
+        int maxLen = Math.max(str1.length(), str2.length());
+
+        if (maxLen == 0) return 1.0;
+        return 1.0 - ((double) distancia / maxLen);
+    }
+
+    private static Set<String> extrairTokensComStemming(String descricao) {
+        Set<String> tokens = new HashSet<>();
+        for (String p : descricao.split("\\s+")) {
+            if (p.length() > 2) {
+                tokens.add(aplicarStemming(p));
+            }
+        }
+        return tokens;
     }
 }
