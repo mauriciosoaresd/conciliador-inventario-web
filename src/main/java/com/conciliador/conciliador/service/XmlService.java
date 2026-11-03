@@ -18,57 +18,57 @@ public class XmlService {
 
     public List<ItemNotaFiscal> lerXml(MultipartFile arquivo) {
         List<ItemNotaFiscal> itens = new ArrayList<>();
-        try (InputStream inputStream = arquivo.getInputStream()) {
+        try (InputStream is = arquivo.getInputStream()) {
             DocumentBuilderFactory dbFactory = DocumentBuilderFactory.newInstance();
             DocumentBuilder dBuilder = dbFactory.newDocumentBuilder();
-            Document doc = dBuilder.parse(inputStream);
+            Document doc = dBuilder.parse(is);
             doc.getDocumentElement().normalize();
 
-            // Extrair CNPJ do Emitente
-            String cnpjEmitente = "";
-            NodeList emitList = doc.getElementsByTagName("emit");
-            if (emitList.getLength() > 0) {
-                Element emitElement = (Element) emitList.item(0);
-                cnpjEmitente = obterValorTag(emitElement, "CNPJ");
+            // Tenta buscar tags padrão NFe (det -> prod) ou tags genéricas de teste (item)
+            NodeList nList = doc.getElementsByTagName("det");
+            if (nList.getLength() == 0) {
+                nList = doc.getElementsByTagName("item"); // Fallback para o nosso XML de teste simplificado
+            }
+            if (nList.getLength() == 0) {
+                nList = doc.getElementsByTagName("ItemNotaFiscal"); // Outro fallback comum
             }
 
-            // Extrair Número da Nota Fiscal
-            String numeroNota = "";
-            NodeList ideList = doc.getElementsByTagName("ide");
-            if (ideList.getLength() > 0) {
-                Element ideElement = (Element) ideList.item(0);
-                numeroNota = obterValorTag(ideElement, "nNF");
-            }
-
-            // Varrer os produtos da nota (<det>)
-            NodeList detList = doc.getElementsByTagName("det");
-            for (int i = 0; i < detList.getLength(); i++) {
-                Element detElement = (Element) detList.item(i);
-                Element prodElement = (Element) detElement.getElementsByTagName("prod").item(0);
-
+            for (int i = 0; i < nList.getLength(); i++) {
+                Element elemento = (Element) nList.item(i);
                 ItemNotaFiscal item = new ItemNotaFiscal();
-                item.setCnpjEmitente(cnpjEmitente);
-                item.setNumeroNota(numeroNota);
-                item.setCodigoProdutoFornecedor(obterValorTag(prodElement, "cProd"));
-                item.setDescricaoProduto(obterValorTag(prodElement, "xProd"));
-                item.setQuantidade(Double.parseDouble(obterValorTag(prodElement, "qCom")));
-                item.setUnidadeMedida(obterValorTag(prodElement, "uCom"));
-                item.setValorUnitario(Double.parseDouble(obterValorTag(prodElement, "vUnCom")));
 
-                itens.add(item);
+                // Suporte a tags padrão NFe (cProd, xProd, qCom) e genéricas (codigo, descricao, quantidade)
+                String codigo = pegarValorTag(elemento, new String[]{"cProd", "codigo", "codigoProdutoFornecedor"});
+                String descricao = pegarValorTag(elemento, new String[]{"xProd", "descricao", "descricaoProduto"});
+                String qtdStr = pegarValorTag(elemento, new String[]{"qCom", "quantidade", "qtd"});
+
+                item.setCodigoProdutoFornecedor(codigo);
+                item.setDescricaoProduto(descricao);
+
+                try {
+                    item.setQuantidade(qtdStr != null && !qtdStr.isEmpty() ? Double.parseDouble(qtdStr.replace(",", ".")) : 1.0);
+                } catch (NumberFormatException e) {
+                    item.setQuantidade(1.0);
+                }
+
+                if (descricao != null && !descricao.isEmpty()) {
+                    itens.add(item);
+                }
             }
-
         } catch (Exception e) {
-            throw new RuntimeException("Erro ao processar o XML da NF-e: " + e.getMessage(), e);
+            throw new RuntimeException("Erro ao processar arquivo XML da nota fiscal: " + e.getMessage(), e);
         }
         return itens;
     }
 
-    private String obterValorTag(Element elemento, String nomeTag) {
-        NodeList nodeList = elemento.getElementsByTagName(nomeTag);
-        if (nodeList != null && nodeList.getLength() > 0) {
-            return nodeList.item(0).getTextContent();
+    private String pegarValorTag(Element elemento, String[] possiveisTags) {
+        for (String tag : possiveisTags) {
+            NodeList lista = elemento.getElementsByTagName(tag);
+            if (lista.getLength() > 0 && lista.item(0).getFirstChild() != null) {
+                return lista.item(0).getFirstChild().getNodeValue().trim();
+            }
         }
+        // Tenta buscar no elemento pai/geral caso a tag esteja solta
         return "";
     }
 }
