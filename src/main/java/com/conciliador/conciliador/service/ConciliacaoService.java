@@ -5,13 +5,17 @@ import com.conciliador.conciliador.model.ProdutoInventario;
 import com.conciliador.conciliador.model.ResultadoConciliacao;
 import com.conciliador.conciliador.model.SinonimoDinamico;
 import com.conciliador.conciliador.repository.SinonimoDinamicoRepository;
+import com.conciliador.conciliador.service.MatchUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 @Service
@@ -47,7 +51,7 @@ public class ConciliacaoService {
                 }
             }
 
-            // CAMADA 2: Motor Híbrido (Base Dinâmica + Stemming Jaccard + Levenshtein)
+            // CAMADA 2: Motor Híbrido (Base Dinâmica + Stemming Jaccard + Levenshtein + Penalização Técnica)
             if (itemMatch == null) {
                 String descInvNorm = aplicarSinonimosDinamicos(MatchUtils.normalizar(prod.getDescricao()));
 
@@ -57,12 +61,18 @@ public class ConciliacaoService {
                 for (ItemNotaFiscal item : itensNotas) {
                     String descNotaNorm = aplicarSinonimosDinamicos(MatchUtils.normalizar(item.getDescricaoProduto()));
 
-                    // Calcula similaridade combinada (Jaccard com Stemming + Levenshtein para erros de digitação)
+                    // Calculo de similaridade combinada (Jaccard + Levenshtein)
                     double escoreJaccard = MatchUtils.calcularSimilaridadeJaccardComStemming(descInvNorm, descNotaNorm);
                     double escoreLevenshtein = MatchUtils.calcularSimilaridadeLevenshtein(descInvNorm, descNotaNorm);
 
-                    // Média ponderada dos escores (70% estrutura/palavras, 30% tolerância a digitação)
-                    double escoreFinal = (escoreJaccard * 0.7) + (escoreLevenshtein * 0.3);
+                    double escoreBase = (escoreJaccard * 0.7) + (escoreLevenshtein * 0.3);
+
+                    // Aplica penalização automática para divergências de especificações numéricas (ex: 18000 vs 48000 BTUs)
+                    double escoreFinal = calcularSimilaridadeComPenalizacao(
+                            prod.getDescricao(),
+                            item.getDescricaoProduto(),
+                            escoreBase
+                    );
 
                     if (escoreFinal > maiorEscore) {
                         maiorEscore = escoreFinal;
@@ -81,7 +91,7 @@ public class ConciliacaoService {
                     if (!dimensoesInventario.isEmpty() && !dimensoesNota.isEmpty() && !dimensoesInventario.equals(dimensoesNota)) {
                         status = "REVISÃO MANUAL - AMBIGUIDADE DE MEDIDA (Inv: " + dimensoesInventario + " vs NF: " + dimensoesNota + ")";
                     } else {
-                        // Aprendizado Automático: Salva sinônimo forte no banco se o match for excelente (> 85%)
+                        // Aprendizado Automático: Salva sinônimo no banco se o match for excelente (>= 85%)
                         if (maiorEscore >= 0.85) {
                             aprenderSinonimoSeNovo(prod.getDescricao(), itemMatch.getDescricaoProduto());
                         }
@@ -110,13 +120,56 @@ public class ConciliacaoService {
                     prod.getEstado(),
                     (int) qtdInventario,
                     qtdNota,
-                    itemMatch != null? itemMatch.getNumeroNota() : null,
-                    itemMatch != null? itemMatch.getNomeArquivoOrigem() : null,
+                    itemMatch != null ? itemMatch.getNumeroNota() : null,
+                    itemMatch != null ? itemMatch.getNomeArquivoOrigem() : null,
                     status
             ));
         }
 
         return resultados;
+    }
+
+    /**
+     * Penaliza drasticamente o escore de similaridade caso ambos os produtos possuam
+     * especificações numéricas (ex: BTUs, potências, voltagens) que divirjam.
+     */
+    private double calcularSimilaridadeComPenalizacao(String descInventario, String descNotaFiscal, double escoreBase) {
+        if (descInventario == null || descNotaFiscal == null) return escoreBase;
+
+        String inv = descInventario.toLowerCase();
+        String nota = descNotaFiscal.toLowerCase();
+
+        // Extração de números de 2 a 5 dígitos (ex: 18000, 48000, 110, 220)
+        Pattern patternNum = Pattern.compile("\\b(\\d{2,5})\\b");
+
+        Matcher matcherInv = patternNum.matcher(inv);
+        Matcher matcherNota = patternNum.matcher(nota);
+
+        Set<String> numerosInv = new HashSet<>();
+        while (matcherInv.find()) {
+            numerosInv.add(matcherInv.group(1));
+        }
+
+        Set<String> numerosNota = new HashSet<>();
+        while (matcherNota.find()) {
+            numerosNota.add(matcherNota.group(1));
+        }
+
+        // Se ambos contêm números de especificação técnica, mas nenhum deles é coincidente, zera o escore
+        if (!numerosInv.isEmpty() && !numerosNota.isEmpty()) {
+            boolean temIntersecao = false;
+            for (String num : numerosInv) {
+                if (numerosNota.contains(num)) {
+                    temIntersecao = true;
+                    break;
+                }
+            }
+            if (!temIntersecao) {
+                return 0.0;
+            }
+        }
+
+        return escoreBase;
     }
 
     private String aplicarSinonimosDinamicos(String texto) {
@@ -131,7 +184,7 @@ public class ConciliacaoService {
             }
             return textoProcessado;
         } catch (Exception e) {
-            return texto; // Fallback seguro caso o banco ainda esteja inicializando
+            return texto;
         }
     }
 
