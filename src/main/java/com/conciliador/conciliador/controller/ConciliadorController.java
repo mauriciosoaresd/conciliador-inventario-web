@@ -79,43 +79,51 @@ public class ConciliadorController {
                     numeroNotaEncontrado = matcher.group(1);
                 }
 
-                String[] linhas = textoExtraido.split("\n");
-                for (String linha : linhas) {
-                    String linhaTrim = linha.trim();
-                    if (linhaTrim.length() > 3) {
-                        ItemNotaFiscal itemOcr = new ItemNotaFiscal();
-                        itemOcr.setCodigoProdutoFornecedor("OCR-GENERIC");
-                        itemOcr.setDescricaoProduto(linhaTrim);
-                        double qtdExtraida = 1.0;
+                    String[] linhas = textoExtraido.split("\n");
+                    for (String linha : linhas) {
+                        String linhaTrim = linha.trim();
+                        if (linhaTrim.length() > 3) {
+                            ItemNotaFiscal itemOcr = new ItemNotaFiscal();
+                            itemOcr.setCodigoProdutoFornecedor("OCR-GENERIC");
+                            itemOcr.setDescricaoProduto(linhaTrim);
 
-                        java.util.regex.Matcher matcherQtd = java.util.regex.Pattern.compile("^(\\d+(?:[.,]\\d+)?)\\s*(?:x|un|cx|pc|\\-)?\\b", java.util.regex.Pattern.CASE_INSENSITIVE).matcher(linhaTrim);
-                        if (matcherQtd.find()) {
-                            try {
-                                qtdExtraida = Double.parseDouble(matcherQtd.group(1).replace(",", "."));
-                            } catch (Exception ignored) {}
-                        } else {
-                            // Fallback secundário: procura por qualquer número isolado que possa representar a quantidade na linha
-                            java.util.regex.Pattern patternGenerico = java.util.regex.Pattern.compile("\\b(\\d+)\\b");
-                            java.util.regex.Matcher matcherGen = patternGenerico.matcher(linhaTrim);
-                            if (matcherGen.find()) {
+                            double qtdExtraida = 1.0;
+
+                            // REGEX PRECISA PARA NF: Procura por um número isolado de quantidade (1 a 3 dígitos)
+                            // tipicamente seguido por separadores ou antes de valores decimais de preço (ex: " 4    3899,90" ou " 3 ")
+                            // Ajustamos para evitar pegar preços ou códigos longos.
+                            java.util.regex.Pattern patternQtdPreciso = java.util.regex.Pattern.compile(
+                                    "\\b(?:qtde?|quant)?[:\\s]*(\\d{1,3})\\s+(?:\\d{1,4}[.,]\\d{2})?\\b",
+                                    java.util.regex.Pattern.CASE_INSENSITIVE
+                            );
+
+                            // Uma abordagem mais direta baseada no layout comum das suas linhas (Ex: Descrição + Qtd + Preço):
+                            // Vamos extrair tokens numéricos da linha e pegar o que representa a quantidade (geralmente o penúltimo ou um número isolado pequeno < 100).
+                            String[] tokens = linhaTrim.split("\\s+");
+                            for (int i = 0; i < tokens.length; i++) {
+                                String token = tokens[i].replace(",", ".");
                                 try {
-                                    double val = Double.parseDouble(matcherGen.group(1));
-                                    // Evita pegar códigos muito longos como quantidade (ex: códigos de barras de 13 dígitos)
-                                    if (val < 1000) {
-                                        qtdExtraida = val;
+                                    // Se o token parece uma quantidade inteira válida (1 a 999) e o próximo token é um valor em dinheiro (contém vírgula/ponto e centavos)
+                                    if (token.matches("^\\d{1,3}$")) {
+                                        int val = Integer.parseInt(token);
+                                        if (val < 1000) { // Quantidades razoáveis de inventário/NF
+                                            // Se houver um token seguinte que seja preço (ex: com formato 0,00 ou .00), este token atual é a quantidade!
+                                            if (i + 1 < tokens.length && tokens[i + 1].matches(".*[.,]\\d{2}.*")) {
+                                                qtdExtraida = val;
+                                                break;
+                                            }
+                                        }
                                     }
                                 } catch (Exception ignored) {}
                             }
+
+                            itemOcr.setQuantidade(qtdExtraida);
+                            itemOcr.setNomeArquivoOrigem(nomeArquivo);
+                            itemOcr.setNumeroNota(numeroNotaEncontrado);
+
+                            itensNotas.add(itemOcr);
                         }
-                        itemOcr.setQuantidade(qtdExtraida);
-
-                        // Atribui o nome do arquivo e o número da nota detectado
-                        itemOcr.setNomeArquivoOrigem(nomeArquivo);
-                        itemOcr.setNumeroNota(numeroNotaEncontrado);
-
-                        itensNotas.add(itemOcr);
                     }
-                }
             }
             }
 

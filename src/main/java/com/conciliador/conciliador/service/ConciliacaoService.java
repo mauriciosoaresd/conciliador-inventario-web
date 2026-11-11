@@ -9,11 +9,7 @@ import com.conciliador.conciliador.service.MatchUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -28,48 +24,59 @@ public class ConciliacaoService {
             List<ProdutoInventario> produtosInventario,
             List<ItemNotaFiscal> itensNotas) {
 
-        Map<String, Long> contagemInventario = produtosInventario.stream()
-                .collect(Collectors.groupingBy(
-                        ProdutoInventario::getCodigo,
-                        Collectors.counting()
-                ));
-
-        List<ResultadoConciliacao> resultados = new ArrayList<>();
+        // 1. Agrupa o inventário por Código, somando a quantidade real contada (já que é inserido de 1 em 1)
+        // Mapeia o Código -> Objeto base do produto + Quantidade Total Contada + Estado
+        Map<String, InventarioAgrupado> inventarioAgrupadoMap = new LinkedHashMap<>();
 
         for (ProdutoInventario prod : produtosInventario) {
+            String codigo = prod.getCodigo() != null ? prod.getCodigo().trim() : "SEM-CODIGO";
+            inventarioAgrupadoMap.putIfAbsent(codigo, new InventarioAgrupado(prod));
+            inventarioAgrupadoMap.get(codigo).incrementarQuantidade();
+        }
+
+        List<ResultadoConciliacao> resultados = new ArrayList<>();
+        Set<Integer> indicesItensNotaConsumidos = new HashSet<>();
+
+        // 2. Processa cada produto único do inventário contra as notas fiscais
+        for (InventarioAgrupado inv : inventarioAgrupadoMap.values()) {
             ItemNotaFiscal itemMatch = null;
             String status = "OK";
             double qtdNota = 0.0;
-            double qtdInventario = contagemInventario.getOrDefault(prod.getCodigo(), 1L);
+            double qtdInventario = inv.getQuantidadeTotal();
 
             // CAMADA 1: Match exato por Código/SKU
-            for (ItemNotaFiscal item : itensNotas) {
-                if (item.getCodigoProdutoFornecedor() != null &&
-                        item.getCodigoProdutoFornecedor().equalsIgnoreCase(prod.getCodigo())) {
+            for (int i = 0; i < itensNotas.size(); i++) {
+                ItemNotaFiscal item = itensNotas.get(i);
+                if (!indicesItensNotaConsumidos.contains(i) &&
+                        item.getCodigoProdutoFornecedor() != null &&
+                        item.getCodigoProdutoFornecedor().equalsIgnoreCase(inv.getProdutoBase().getCodigo())) {
                     itemMatch = item;
+                    indicesItensNotaConsumidos.add(i);
                     break;
                 }
             }
 
-            // CAMADA 2: Motor Híbrido (Base Dinâmica + Stemming Jaccard + Levenshtein + Penalização Técnica)
+            // CAMADA 2: Motor Híbrido (caso não tenha match exato por código)
             if (itemMatch == null) {
-                String descInvNorm = aplicarSinonimosDinamicos(MatchUtils.normalizar(prod.getDescricao()));
+                String descInvNorm = aplicarSinonimosDinamicos(MatchUtils.normalizar(inv.getProdutoBase().getDescricao()));
 
                 double maiorEscore = 0.0;
                 ItemNotaFiscal melhorCandidato = null;
+                int melhorIndice = -1;
 
-                for (ItemNotaFiscal item : itensNotas) {
+                for (int i = 0; i < itensNotas.size(); i++) {
+                    if (indicesItensNotaConsumidos.contains(i)) continue;
+
+                    ItemNotaFiscal item = itensNotas.get(i);
                     String descNotaNorm = aplicarSinonimosDinamicos(MatchUtils.normalizar(item.getDescricaoProduto()));
 
-                    // Calculo de similaridade combinada (Jaccard + Levenshtein)
                     double escoreJaccard = MatchUtils.calcularSimilaridadeJaccardComStemming(descInvNorm, descNotaNorm);
                     double escoreLevenshtein = MatchUtils.calcularSimilaridadeLevenshtein(descInvNorm, descNotaNorm);
-
                     double escoreBase = (escoreJaccard * 0.7) + (escoreLevenshtein * 0.3);
 
-                    // Aplica penalização automática para divergências de especificações numéricas (ex: 18000 vs 48000 BTUs)
+                    // Validação de penalização técnica (BTUs/números) e marcas conflitantes
                     double escoreFinal = calcularSimilaridadeComPenalizacao(
-                            prod.getDescricao(),
+                            inv.getProdutoBase().getDescricao(),
                             item.getDescricaoProduto(),
                             escoreBase
                     );
@@ -77,31 +84,29 @@ public class ConciliacaoService {
                     if (escoreFinal > maiorEscore) {
                         maiorEscore = escoreFinal;
                         melhorCandidato = item;
+                        melhorIndice = i;
                     }
                 }
 
-                // Limiar de segurança de 30% para aceitação do match
                 if (maiorEscore >= 0.30 && melhorCandidato != null) {
                     itemMatch = melhorCandidato;
+                    indicesItensNotaConsumidos.add(melhorIndice);
 
-                    // CAMADA 3: Verificação de Ambiguidade de Medidas via Regex
-                    Set<String> dimensoesInventario = MatchUtils.extrairDimensoes(prod.getDescricao());
+                    // CAMADA 3: Ambiguidade de Medidas via Regex
+                    Set<String> dimensoesInventario = MatchUtils.extrairDimensoes(inv.getProdutoBase().getDescricao());
                     Set<String> dimensoesNota = MatchUtils.extrairDimensoes(itemMatch.getDescricaoProduto());
 
                     if (!dimensoesInventario.isEmpty() && !dimensoesNota.isEmpty() && !dimensoesInventario.equals(dimensoesNota)) {
-                        status = "REVISÃO MANUAL - AMBIGUIDADE DE MEDIDA (Inv: " + dimensoesInventario + " vs NF: " + dimensoesNota + ")";
-                    } else {
-                        // Aprendizado Automático: Salva sinônimo no banco se o match for excelente (>= 85%)
-                        if (maiorEscore >= 0.85) {
-                            aprenderSinonimoSeNovo(prod.getDescricao(), itemMatch.getDescricaoProduto());
-                        }
+                        status = "REVISÃO MANUAL - AMBIGUIDADE DE MEDIDA";
+                    } else if (maiorEscore >= 0.85) {
+                        aprenderSinonimoSeNovo(inv.getProdutoBase().getDescricao(), itemMatch.getDescricaoProduto());
                     }
                 }
             }
 
-            // Definição de Status Quantitativo
+            // 3. Avaliação Quantitativa Final (Inventário Agrupado vs Quantidade da NF)
             if (itemMatch != null) {
-                qtdNota = itemMatch.getQuantidade();
+                qtdNota = itemMatch.getQuantidade(); // Ex: 3 da Samsung
                 if (!status.startsWith("REVISÃO")) {
                     if (qtdInventario > qtdNota) {
                         status = "DIVERGENTE - SOBRA";
@@ -114,12 +119,12 @@ public class ConciliacaoService {
             }
 
             resultados.add(new ResultadoConciliacao(
-                    prod.getCodigo(),
-                    prod.getDescricao(),
+                    inv.getProdutoBase().getCodigo(),
+                    inv.getProdutoBase().getDescricao(),
                     itemMatch != null ? itemMatch.getDescricaoProduto() : null,
-                    prod.getEstado(),
-                    (int) qtdInventario,
-                    qtdNota,
+                    inv.getProdutoBase().getEstado(),
+                    (int) qtdInventario, // Quantidade total contada (ex: 2)
+                    qtdNota,             // Quantidade da Nota Fiscal (ex: 3)
                     itemMatch != null ? itemMatch.getNumeroNota() : null,
                     itemMatch != null ? itemMatch.getNomeArquivoOrigem() : null,
                     status
@@ -130,32 +135,55 @@ public class ConciliacaoService {
     }
 
     /**
-     * Penaliza drasticamente o escore de similaridade caso ambos os produtos possuam
-     * especificações numéricas (ex: BTUs, potências, voltagens) que divirjam.
+     * Classe auxiliar interna para agrupar o inventário por item.
      */
+    private static class InventarioAgrupado {
+        private final ProdutoInventario produtoBase;
+        private int quantidadeTotal;
+
+        public InventarioAgrupado(ProdutoInventario produtoBase) {
+            this.produtoBase = produtoBase;
+            this.quantidadeTotal = 0;
+        }
+
+        public void incrementarQuantidade() {
+            this.quantidadeTotal += 1;
+        }
+
+        public ProdutoInventario getProdutoBase() {
+            return produtoBase;
+        }
+
+        public int getQuantidadeTotal() {
+            return quantidadeTotal;
+        }
+    }
+
     private double calcularSimilaridadeComPenalizacao(String descInventario, String descNotaFiscal, double escoreBase) {
         if (descInventario == null || descNotaFiscal == null) return escoreBase;
 
         String inv = descInventario.toLowerCase();
         String nota = descNotaFiscal.toLowerCase();
 
-        // Extração de números de 2 a 5 dígitos (ex: 18000, 48000, 110, 220)
-        Pattern patternNum = Pattern.compile("\\b(\\d{2,5})\\b");
+        // Blindagem de Marcas
+        String[] marcasConhecidas = {"daikin", "samsung", "lg", "intelbras", "cisco", "dell", "hp", "lenovo", "positivo", "tp-link", "d-link"};
+        for (String marca : marcasConhecidas) {
+            if (inv.contains(marca) != nota.contains(marca)) {
+                return 0.0; // Zera o match se as marcas baterem cruzadas (ex: Daikin vs Samsung)
+            }
+        }
 
+        // Blindagem de Especificações Numéricas (BTUs, potências, etc.)
+        Pattern patternNum = Pattern.compile("\\b(\\d{2,5})\\b");
         Matcher matcherInv = patternNum.matcher(inv);
         Matcher matcherNota = patternNum.matcher(nota);
 
         Set<String> numerosInv = new HashSet<>();
-        while (matcherInv.find()) {
-            numerosInv.add(matcherInv.group(1));
-        }
+        while (matcherInv.find()) numerosInv.add(matcherInv.group(1));
 
         Set<String> numerosNota = new HashSet<>();
-        while (matcherNota.find()) {
-            numerosNota.add(matcherNota.group(1));
-        }
+        while (matcherNota.find()) numerosNota.add(matcherNota.group(1));
 
-        // Se ambos contêm números de especificação técnica, mas nenhum deles é coincidente, zera o escore
         if (!numerosInv.isEmpty() && !numerosNota.isEmpty()) {
             boolean temIntersecao = false;
             for (String num : numerosInv) {
@@ -164,9 +192,7 @@ public class ConciliacaoService {
                     break;
                 }
             }
-            if (!temIntersecao) {
-                return 0.0;
-            }
+            if (!temIntersecao) return 0.0;
         }
 
         return escoreBase;
