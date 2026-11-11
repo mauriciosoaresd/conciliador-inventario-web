@@ -62,24 +62,61 @@ public class ConciliadorController {
 
                 String nomeArquivo = doc.getOriginalFilename();
                 if (nomeArquivo != null && nomeArquivo.toLowerCase().endsWith(".xml")) {
-                    // Processamento via XML estruturado oficial
+                    // Processamento via XML estruturado oficial (já preenche no XmlService)
                     itensNotas.addAll(xmlService.lerXml(doc));
                 } else {
-                    // Processamento via PDF ou Imagem com OCR/PDFBox
-                    String textoExtraido = documentoParserService.extrairTexto(doc);
+                // Processamento via PDF ou Imagem com OCR/PDFBox
+                String textoExtraido = documentoParserService.extrairTexto(doc);
 
-                    String[] linhas = textoExtraido.split("\n");
-                    for (String linha : linhas) {
-                        String linhaTrim = linha.trim();
-                        if (linhaTrim.length() > 3) {
-                            ItemNotaFiscal itemOcr = new ItemNotaFiscal();
-                            itemOcr.setCodigoProdutoFornecedor("OCR-GENERIC");
-                            itemOcr.setDescricaoProduto(linhaTrim);
-                            itemOcr.setQuantidade(1.0);
-                            itensNotas.add(itemOcr);
+                // Tenta extrair o número da nota do texto extraído usando Regex
+                String numeroNotaEncontrado = "-"; // Valor padrão caso não encontre
+                java.util.regex.Pattern pattern = java.util.regex.Pattern.compile(
+                        "(?i)(?:n[ºo°]|nf-?e|nota\\s*fiscal)[^0-9]*([0-9]+)",
+                        java.util.regex.Pattern.CASE_INSENSITIVE
+                );
+                java.util.regex.Matcher matcher = pattern.matcher(textoExtraido);
+                if (matcher.find()) {
+                    numeroNotaEncontrado = matcher.group(1);
+                }
+
+                String[] linhas = textoExtraido.split("\n");
+                for (String linha : linhas) {
+                    String linhaTrim = linha.trim();
+                    if (linhaTrim.length() > 3) {
+                        ItemNotaFiscal itemOcr = new ItemNotaFiscal();
+                        itemOcr.setCodigoProdutoFornecedor("OCR-GENERIC");
+                        itemOcr.setDescricaoProduto(linhaTrim);
+                        double qtdExtraida = 1.0;
+
+                        java.util.regex.Matcher matcherQtd = java.util.regex.Pattern.compile("^(\\d+(?:[.,]\\d+)?)\\s*(?:x|un|cx|pc|\\-)?\\b", java.util.regex.Pattern.CASE_INSENSITIVE).matcher(linhaTrim);
+                        if (matcherQtd.find()) {
+                            try {
+                                qtdExtraida = Double.parseDouble(matcherQtd.group(1).replace(",", "."));
+                            } catch (Exception ignored) {}
+                        } else {
+                            // Fallback secundário: procura por qualquer número isolado que possa representar a quantidade na linha
+                            java.util.regex.Pattern patternGenerico = java.util.regex.Pattern.compile("\\b(\\d+)\\b");
+                            java.util.regex.Matcher matcherGen = patternGenerico.matcher(linhaTrim);
+                            if (matcherGen.find()) {
+                                try {
+                                    double val = Double.parseDouble(matcherGen.group(1));
+                                    // Evita pegar códigos muito longos como quantidade (ex: códigos de barras de 13 dígitos)
+                                    if (val < 1000) {
+                                        qtdExtraida = val;
+                                    }
+                                } catch (Exception ignored) {}
+                            }
                         }
+                        itemOcr.setQuantidade(qtdExtraida);
+
+                        // Atribui o nome do arquivo e o número da nota detectado
+                        itemOcr.setNomeArquivoOrigem(nomeArquivo);
+                        itemOcr.setNumeroNota(numeroNotaEncontrado);
+
+                        itensNotas.add(itemOcr);
                     }
                 }
+            }
             }
 
             // 3. Executa o Motor Híbrido de Conciliação (Stemming + Levenshtein + JPA Dynamic Synonyms)

@@ -22,6 +22,9 @@ public class ProdutoInventario {
     @CsvBindByName(column = "Imagem")
     private String imagem;
 
+    @CsvBindByName(column = "Quantidade", required = false)
+    private Double quantidade;
+
     // Getters e Setters
     public String getCodigo() { return codigo; }
     public void setCodigo(String codigo) { this.codigo = codigo; }
@@ -40,6 +43,12 @@ public class ProdutoInventario {
 
     public String getImagem() { return imagem; }
     public void setImagem(String imagem) { this.imagem = imagem; }
+
+    public Double getQuantidade() {
+        // Se a coluna não existir no CSV ou vier nula, assume 1 por padrão
+        return quantidade != null ? quantidade : 1.0;
+    }
+    public void setQuantidade(Double quantidade) { this.quantidade = quantidade; }
 
     @Override
     public String toString() {

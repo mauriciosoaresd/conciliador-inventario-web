@@ -32,8 +32,19 @@ public class ExcelService {
             CellStyle styleDivergente = criarEstiloStatus(workbook, IndexedColors.ROSE);
             CellStyle styleNaoEncontrado = criarEstiloStatus(workbook, IndexedColors.GREY_40_PERCENT);
 
-            // Linha de Cabeçalho
-            String[] colunas = {"Código", "Descrição Inventário", "Descrição Nota Fiscal", "Estado", "Qtd Inventário", "Qtd Nota Fiscal", "Status"};
+            // Linha de Cabeçalho atualizada com as 2 novas colunas de rastreabilidade
+            String[] colunas = {
+                    "Código",
+                    "Descrição Inventário",
+                    "Descrição Nota Fiscal",
+                    "Estado",
+                    "Qtd Inventário",
+                    "Qtd Nota Fiscal",
+                    "Nº da Nota Fiscal",
+                    "Nome do Arquivo",
+                    "Status"
+            };
+
             Row headerRow = sheet.createRow(0);
             for (int i = 0; i < colunas.length; i++) {
                 Cell cell = headerRow.createCell(i);
@@ -53,8 +64,12 @@ public class ExcelService {
                 row.createCell(4).setCellValue(res.getQuantidadeInventario());
                 row.createCell(5).setCellValue(res.getQuantidadeNotaFiscal());
 
-                // Célula de Status com formatação condicional baseada no texto
-                Cell statusCell = row.createCell(6);
+                // Preenchendo os novos campos de rastreabilidade
+                row.createCell(6).setCellValue(res.getNumeroNotaFiscal() != null ? res.getNumeroNotaFiscal() : "-");
+                row.createCell(7).setCellValue(res.getNomeArquivoNota() != null ? res.getNomeArquivoNota() : "-");
+
+                // Célula de Status com formatação condicional baseada no texto (agora na coluna index 8)
+                Cell statusCell = row.createCell(8);
                 String statusText = res.getStatus();
                 statusCell.setCellValue(statusText);
 

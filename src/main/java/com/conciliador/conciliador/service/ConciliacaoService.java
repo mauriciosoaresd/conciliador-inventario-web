@@ -10,7 +10,9 @@ import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 @Service
 public class ConciliacaoService {
@@ -22,13 +24,19 @@ public class ConciliacaoService {
             List<ProdutoInventario> produtosInventario,
             List<ItemNotaFiscal> itensNotas) {
 
+        Map<String, Long> contagemInventario = produtosInventario.stream()
+                .collect(Collectors.groupingBy(
+                        ProdutoInventario::getCodigo,
+                        Collectors.counting()
+                ));
+
         List<ResultadoConciliacao> resultados = new ArrayList<>();
 
         for (ProdutoInventario prod : produtosInventario) {
             ItemNotaFiscal itemMatch = null;
             String status = "OK";
             double qtdNota = 0.0;
-            int qtdInventario = 1; // Padrão unitário físico
+            double qtdInventario = contagemInventario.getOrDefault(prod.getCodigo(), 1L);
 
             // CAMADA 1: Match exato por Código/SKU
             for (ItemNotaFiscal item : itensNotas) {
@@ -100,7 +108,7 @@ public class ConciliacaoService {
                     prod.getDescricao(),
                     itemMatch != null ? itemMatch.getDescricaoProduto() : null,
                     prod.getEstado(),
-                    qtdInventario,
+                    (int) qtdInventario,
                     qtdNota,
                     itemMatch != null? itemMatch.getNumeroNota() : null,
                     itemMatch != null? itemMatch.getNomeArquivoOrigem() : null,

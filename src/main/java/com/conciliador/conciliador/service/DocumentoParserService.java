@@ -60,8 +60,7 @@ public class DocumentoParserService {
         StringBuilder sb = new StringBuilder();
         try (PDDocument document = Loader.loadPDF(file)) {
             PDFRenderer pdfRenderer = new PDFRenderer(document);
-            Tesseract tesseract = new Tesseract();
-            tesseract.setLanguage("por"); // Define o idioma português
+            Tesseract tesseract = inicializarTesseract();
 
             for (int i = 0; i < document.getNumberOfPages(); i++) {
                 // Renderiza a página do PDF em uma imagem a 300 DPI para alta qualidade de OCR
@@ -77,11 +76,31 @@ public class DocumentoParserService {
 
     private String executarOcrEmImagem(File file) {
         try {
-            Tesseract tesseract = new Tesseract();
-            tesseract.setLanguage("por");
+            Tesseract tesseract = inicializarTesseract();
             return tesseract.doOCR(file);
         } catch (Exception e) {
             throw new RuntimeException("Erro ao executar OCR na imagem: " + e.getMessage(), e);
         }
+    }
+
+    /**
+     * Inicializa a instância do Tesseract apontando para o diretório "tessdata"
+     * e configurando o idioma português.
+     */
+    private Tesseract inicializarTesseract() {
+        Tesseract tesseract = new Tesseract();
+
+        // Verifica se a pasta tessdata existe na raiz ou em src/main/resources
+        File tessDataFolder = new File("tessdata");
+        if (!tessDataFolder.exists()) {
+            tessDataFolder = new File("src/main/resources/tessdata");
+        }
+
+        if (tessDataFolder.exists()) {
+            tesseract.setDatapath(tessDataFolder.getAbsolutePath());
+        }
+
+        tesseract.setLanguage("por"); // Define o idioma português
+        return tesseract;
     }
 }

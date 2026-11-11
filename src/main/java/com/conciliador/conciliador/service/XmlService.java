@@ -18,32 +18,56 @@ public class XmlService {
 
     public List<ItemNotaFiscal> lerXml(MultipartFile arquivo) {
         List<ItemNotaFiscal> itens = new ArrayList<>();
+        String nomeArquivo = arquivo.getOriginalFilename(); // <--- Captura o nome do arquivo
+
         try (InputStream is = arquivo.getInputStream()) {
             DocumentBuilderFactory dbFactory = DocumentBuilderFactory.newInstance();
             DocumentBuilder dBuilder = dbFactory.newDocumentBuilder();
             Document doc = dBuilder.parse(is);
             doc.getDocumentElement().normalize();
 
-            // Tenta buscar tags padrão NFe (det -> prod) ou tags genéricas de teste (item)
+            // 1. Tenta extrair o Número da Nota Fiscal (nNF padrão NFe ou tags genéricas)
+            String numeroNota = "";
+            NodeList ideList = doc.getElementsByTagName("ide");
+            if (ideList.getLength() > 0) {
+                Element ideElement = (Element) ideList.item(0);
+                numeroNota = pegarValorTag(ideElement, new String[]{"nNF", "numeroNota", "numero"});
+            }
+            if (numeroNota.isEmpty()) {
+                numeroNota = pegarValorTag(doc.getDocumentElement(), new String[]{"nNF", "numeroNota", "numero"});
+            }
+
+            // 2. Busca os itens da nota
             NodeList nList = doc.getElementsByTagName("det");
             if (nList.getLength() == 0) {
-                nList = doc.getElementsByTagName("item"); // Fallback para o nosso XML de teste simplificado
+                nList = doc.getElementsByTagName("item"); // Fallback para XML de teste simplificado
             }
             if (nList.getLength() == 0) {
-                nList = doc.getElementsByTagName("ItemNotaFiscal"); // Outro fallback comum
+                nList = doc.getElementsByTagName("ItemNotaFiscal");
             }
 
             for (int i = 0; i < nList.getLength(); i++) {
                 Element elemento = (Element) nList.item(i);
                 ItemNotaFiscal item = new ItemNotaFiscal();
 
-                // Suporte a tags padrão NFe (cProd, xProd, qCom) e genéricas (codigo, descricao, quantidade)
                 String codigo = pegarValorTag(elemento, new String[]{"cProd", "codigo", "codigoProdutoFornecedor"});
                 String descricao = pegarValorTag(elemento, new String[]{"xProd", "descricao", "descricaoProduto"});
-                String qtdStr = pegarValorTag(elemento, new String[]{"qCom", "quantidade", "qtd"});
+                String qtdStr = pegarValorTag(elemento, new String[]{"qCom", "qTrib", "quantidade", "qtd", "qtdItem", "quant", "QTD"});
+
+                try {
+                    item.setQuantidade(qtdStr != null && !qtdStr.isEmpty()
+                            ? Double.parseDouble(qtdStr.replace(",", "."))
+                            : 1.0);
+                } catch (NumberFormatException e) {
+                    item.setQuantidade(1.0);
+                }
 
                 item.setCodigoProdutoFornecedor(codigo);
                 item.setDescricaoProduto(descricao);
+
+                // Atribui corretamente os dados de rastreabilidade
+                item.setNumeroNota(numeroNota);
+                item.setNomeArquivoOrigem(nomeArquivo);
 
                 try {
                     item.setQuantidade(qtdStr != null && !qtdStr.isEmpty() ? Double.parseDouble(qtdStr.replace(",", ".")) : 1.0);
@@ -68,7 +92,6 @@ public class XmlService {
                 return lista.item(0).getFirstChild().getNodeValue().trim();
             }
         }
-        // Tenta buscar no elemento pai/geral caso a tag esteja solta
         return "";
     }
 }
