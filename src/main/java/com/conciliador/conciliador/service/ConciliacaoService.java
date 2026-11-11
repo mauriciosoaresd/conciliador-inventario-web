@@ -102,6 +102,8 @@ public class ConciliacaoService {
                     prod.getEstado(),
                     qtdInventario,
                     qtdNota,
+                    itemMatch != null? itemMatch.getNumeroNota() : null,
+                    itemMatch != null? itemMatch.getNomeArquivoOrigem() : null,
                     status
             ));
         }

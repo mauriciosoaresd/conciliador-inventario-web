@@ -7,15 +7,19 @@ public class ResultadoConciliacao {
     private String estado;
     private int quantidadeInventario;
     private double quantidadeNotaFiscal;
+    private String numeroNotaFiscal;
+    private String nomeArquivoNota;
     private String status;
 
-    public ResultadoConciliacao(String codigo, String descricaoInventario, String descricaoNotaFiscal, String estado, int quantidadeInventario, double quantidadeNotaFiscal, String status) {
+    public ResultadoConciliacao(String codigo, String descricaoInventario, String descricaoNotaFiscal, String estado, int quantidadeInventario, double quantidadeNotaFiscal, String getNumeroNota, String nomeArquivoNota, String status) {
         this.codigo = codigo;
         this.descricaoInventario = descricaoInventario;
         this.descricaoNotaFiscal = descricaoNotaFiscal;
         this.estado = estado;
         this.quantidadeInventario = quantidadeInventario;
         this.quantidadeNotaFiscal = quantidadeNotaFiscal;
+        this.numeroNotaFiscal = getNumeroNota;
+        this.nomeArquivoNota = nomeArquivoNota;
         this.status = status;
     }
 
@@ -37,6 +41,12 @@ public class ResultadoConciliacao {
 
     public double getQuantidadeNotaFiscal() { return quantidadeNotaFiscal; }
     public void setQuantidadeNotaFiscal(double quantidadeNotaFiscal) { this.quantidadeNotaFiscal = quantidadeNotaFiscal; }
+
+    public String getNumeroNotaFiscal() { return numeroNotaFiscal; }
+    public void setNumeroNotaFiscal(String numeroNotaFiscal) { this.numeroNotaFiscal = numeroNotaFiscal; }
+
+    public String getNomeArquivoNota() { return nomeArquivoNota; }
+    public void setNomeArquivoNota(String nomeArquivoNota) { this.nomeArquivoNota = nomeArquivoNota; }
 
     public String getStatus() { return status; }
     public void setStatus(String status) { this.status = status; }
