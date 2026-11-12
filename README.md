@@ -9,7 +9,7 @@ Aplicação web em Java e Spring Boot para comparar um inventário em CSV com it
 - Extração de texto de PDFs e OCR de PDFs digitalizados e imagens PNG, JPG ou JPEG.
 - Correspondência por similaridade textual da descrição, com validações para números e dimensões; códigos de inventário e de fornecedor não são usados como critério de correspondência.
 - Agrupamento de linhas fiscais com a mesma descrição normalizada dentro de cada documento, sem combinar documentos diferentes.
-- Relatório com uma linha-resumo por descrição, comparando o total do inventário com a soma fiscal das notas correspondentes, seguida de detalhes individuais para cada nota. As linhas de detalhe não repetem a quantidade do inventário.
+- Relatório com alocação das quantidades físicas entre as notas correspondentes, mantendo uma linha por alocação e identificando separadamente o saldo físico sem NF ou o excedente fiscal sem item físico.
 - Cadastro de sinônimos no H2 quando uma correspondência por descrição alcança o limite de confiança implementado.
 - Geração de relatório `.xlsx` com quantidades, rastreabilidade do documento de origem e status da conciliação.
 
@@ -62,7 +62,7 @@ INV-002,Cadeira de escritório,,,Regular,,1
 
 Os nomes dos cabeçalhos devem corresponder aos apresentados no exemplo. A quantidade pode ser fracionária. Linhas com descrições normalizadas equivalentes são agrupadas e suas quantidades somadas, mesmo que tenham códigos diferentes. Descrições diferentes permanecem separadas.
 
-Na conciliação, itens com a mesma descrição são totalizados separadamente em cada documento fiscal. Por exemplo, um inventário de 10 unidades e duas notas com 5 unidades cada gera um resumo de 10 contra 10 e dois detalhes de 5, um por nota. A quantidade do inventário aparece somente no resumo; detalhes exibem `-` nessa coluna para não sugerir comparações independentes. A correspondência por descrição é aproximada e pode exigir revisão, especialmente para descrições curtas ou ambíguas.
+Na conciliação, itens com a mesma descrição são totalizados separadamente em cada documento fiscal e as quantidades são alocadas sem contar a mesma unidade física mais de uma vez. Por exemplo, um inventário de 10 unidades e duas notas com 4 unidades cada gera duas linhas `OK` de 4 unidades e uma linha de 2 unidades físicas com `-` na quantidade fiscal e status `SEM NF CORRESPONDENTE`. Se uma nota indicar mais unidades do que restam no inventário, a parte alocada aparece como `OK` e o excedente fiscal é listado separadamente como não alocado ao físico. As quantidades fiscais identificadas são alocadas na ordem dos documentos enviados; a alocação é por quantidade e não identifica individualmente cada peça física. Quantidades fiscais desconhecidas ou descrições com medidas conflitantes exigem revisão manual e não são tratadas como saldo sem NF. A correspondência por descrição é aproximada e pode exigir revisão, especialmente para descrições curtas ou ambíguas.
 
 ## Banco de dados
 

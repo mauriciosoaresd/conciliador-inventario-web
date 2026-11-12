@@ -69,7 +69,9 @@ public class ExcelService {
                 }
                 Cell quantidadeNotaCell = row.createCell(5);
                 if (res.getQuantidadeNotaFiscal() == null) {
-                    quantidadeNotaCell.setCellValue("NÃO IDENTIFICADA");
+                    quantidadeNotaCell.setCellValue(
+                            statusSemNotaFiscal(res.getStatus()) ? "-" : "NÃO IDENTIFICADA"
+                    );
                 } else {
                     quantidadeNotaCell.setCellValue(res.getQuantidadeNotaFiscal());
                 }
@@ -116,5 +118,9 @@ public class ExcelService {
         style.setFont(font);
         style.setAlignment(HorizontalAlignment.CENTER);
         return style;
+    }
+
+    private boolean statusSemNotaFiscal(String status) {
+        return status != null && status.startsWith("SEM NF CORRESPONDENTE");
     }
 }

@@ -83,22 +83,7 @@ public class ConciliacaoService {
                 }
             }
 
-            if (correspondencias.isEmpty()) {
-                resultados.add(new ResultadoConciliacao(
-                        inv.getCodigos(),
-                        inv.getProdutoBase().getDescricao(),
-                        "-",
-                        inv.getProdutoBase().getEstado(),
-                        inv.getQuantidadeTotal(),
-                        0.0,
-                        null,
-                        null,
-                        "NÃO ENCONTRADO NO DOCUMENTO"
-                ));
-            } else {
-                resultados.add(criarResumo(inv, correspondencias));
-                correspondencias.stream().map(this::criarDetalhe).forEach(resultados::add);
-            }
+            adicionarAlocacoes(inv, correspondencias, resultados);
         }
 
         // 4. Adiciona ao relatório APENAS os itens reais da Nota Fiscal que NÃO foram consumidos,
@@ -130,64 +115,155 @@ public class ConciliacaoService {
         return resultados;
     }
 
-    private ResultadoConciliacao criarResumo(InventarioAgrupado inventario, List<ItemNotaFiscal> correspondencias) {
-        Double quantidadeFiscalTotal = 0.0;
-        boolean dimensoesDivergentes = false;
-        Set<String> dimensoesInventario = MatchUtils.extrairDimensoes(inventario.getProdutoBase().getDescricao());
+    private void adicionarAlocacoes(
+            InventarioAgrupado inventario,
+            List<ItemNotaFiscal> correspondencias,
+            List<ResultadoConciliacao> resultados
+    ) {
+        double quantidadeFisicaRestante = inventario.getQuantidadeTotal();
+        Set<String> dimensoesInventario = MatchUtils.extrairDimensoes(
+                inventario.getProdutoBase().getDescricao()
+        );
+        List<ItemNotaFiscal> correspondenciasOrdenadas = new ArrayList<>(correspondencias);
+        correspondenciasOrdenadas.sort(Comparator.comparing(
+                item -> item.getQuantidade() == null
+                        || dimensoesDivergem(dimensoesInventario, item.getDescricaoProduto())
+        ));
 
-        for (ItemNotaFiscal item : correspondencias) {
-            if (item.getQuantidade() == null) {
-                quantidadeFiscalTotal = null;
-            } else if (quantidadeFiscalTotal != null) {
-                quantidadeFiscalTotal += item.getQuantidade();
+        for (ItemNotaFiscal item : correspondenciasOrdenadas) {
+            boolean dimensoesDivergentes = dimensoesDivergem(
+                    dimensoesInventario,
+                    item.getDescricaoProduto()
+            );
+            if (item.getQuantidade() == null || dimensoesDivergentes) {
+                if (quantidadeFisicaRestante > 0) {
+                    String status = dimensoesDivergentes
+                            ? "REVISÃO MANUAL - AMBIGUIDADE DE MEDIDA"
+                            : "REVISÃO MANUAL - QUANTIDADE NÃO IDENTIFICADA";
+                    if (item.getQuantidade() == null && dimensoesDivergentes) {
+                        status += "; QUANTIDADE NÃO IDENTIFICADA";
+                    }
+                    resultados.add(criarLinha(
+                            inventario,
+                            item,
+                            quantidadeFisicaRestante,
+                            item.getQuantidade(),
+                            status
+                    ));
+                    quantidadeFisicaRestante = 0;
+                } else {
+                    resultados.add(criarItemApenasNaNota(item, item.getQuantidade(), dimensoesDivergentes));
+                }
+                continue;
             }
-            Set<String> dimensoesNota = MatchUtils.extrairDimensoes(item.getDescricaoProduto());
-            dimensoesDivergentes |= !dimensoesInventario.isEmpty()
-                    && !dimensoesNota.isEmpty()
-                    && !dimensoesInventario.equals(dimensoesNota);
+
+            double quantidadeFiscalRestante = item.getQuantidade();
+            double quantidadeAlocada = Math.min(quantidadeFisicaRestante, quantidadeFiscalRestante);
+            if (quantidadeAlocada > 0) {
+                resultados.add(criarLinha(
+                        inventario,
+                        item,
+                        quantidadeAlocada,
+                        quantidadeAlocada,
+                        "OK"
+                ));
+                quantidadeFisicaRestante = subtrairQuantidade(quantidadeFisicaRestante, quantidadeAlocada);
+                quantidadeFiscalRestante = subtrairQuantidade(quantidadeFiscalRestante, quantidadeAlocada);
+            }
+            if (quantidadeFiscalRestante > 0) {
+                resultados.add(criarItemApenasNaNota(
+                        item,
+                        quantidadeFiscalRestante,
+                        "ITEM APENAS NA NF (EXCEDENTE NÃO ALOCADO AO INVENTÁRIO)"
+                ));
+            } else if (item.getQuantidade() == 0) {
+                resultados.add(criarItemApenasNaNota(
+                        item,
+                        0.0,
+                        "REVISÃO MANUAL - QUANTIDADE FISCAL ZERO"
+                ));
+            }
         }
 
-        String status;
-        if (dimensoesDivergentes) {
-            status = "REVISÃO MANUAL - AMBIGUIDADE DE MEDIDA";
-        } else if (quantidadeFiscalTotal == null) {
-            status = "REVISÃO MANUAL - QUANTIDADE NÃO IDENTIFICADA";
-        } else if (inventario.getQuantidadeTotal() > quantidadeFiscalTotal) {
-            status = "DIVERGENTE - SOBRA";
-        } else if (inventario.getQuantidadeTotal() < quantidadeFiscalTotal) {
-            status = "DIVERGENTE - FALTA";
-        } else {
-            status = "OK";
+        if (quantidadeFisicaRestante > 0) {
+            resultados.add(new ResultadoConciliacao(
+                    inventario.getCodigos(),
+                    inventario.getProdutoBase().getDescricao(),
+                    "-",
+                    inventario.getProdutoBase().getEstado(),
+                    quantidadeFisicaRestante,
+                    null,
+                    null,
+                    null,
+                    "SEM NF CORRESPONDENTE"
+            ));
         }
-        if (quantidadeFiscalTotal == null && dimensoesDivergentes) {
-            status += "; QUANTIDADE NÃO IDENTIFICADA";
-        }
+    }
 
-        ItemNotaFiscal primeiroItem = correspondencias.get(0);
+    private boolean dimensoesDivergem(Set<String> dimensoesInventario, String descricaoNota) {
+        Set<String> dimensoesNota = MatchUtils.extrairDimensoes(descricaoNota);
+        return !dimensoesInventario.isEmpty()
+                && !dimensoesNota.isEmpty()
+                && !dimensoesInventario.equals(dimensoesNota);
+    }
+
+    private double subtrairQuantidade(double quantidade, double quantidadeAlocada) {
+        double restante = quantidade - quantidadeAlocada;
+        return Math.abs(restante) < 0.000001 ? 0 : restante;
+    }
+
+    private ResultadoConciliacao criarLinha(
+            InventarioAgrupado inventario,
+            ItemNotaFiscal item,
+            Double quantidadeInventario,
+            Double quantidadeNotaFiscal,
+            String status
+    ) {
         return new ResultadoConciliacao(
                 inventario.getCodigos(),
                 inventario.getProdutoBase().getDescricao(),
-                primeiroItem.getDescricaoProduto(),
+                item.getDescricaoProduto(),
                 inventario.getProdutoBase().getEstado(),
-                inventario.getQuantidadeTotal(),
-                quantidadeFiscalTotal,
-                "RESUMO DE " + correspondencias.size() + (correspondencias.size() == 1 ? " NF" : " NFs"),
-                "-",
+                quantidadeInventario,
+                quantidadeNotaFiscal,
+                item.getNumeroNota(),
+                item.getNomeArquivoOrigem(),
                 status
         );
     }
 
-    private ResultadoConciliacao criarDetalhe(ItemNotaFiscal item) {
-        String status = item.getQuantidade() == null
-                ? "REVISÃO MANUAL - QUANTIDADE NÃO IDENTIFICADA (DETALHE DA NF)"
-                : "DETALHE DA NF (INCLUÍDO NO RESUMO)";
+    private ResultadoConciliacao criarItemApenasNaNota(
+            ItemNotaFiscal item,
+            Double quantidadeNota,
+            boolean dimensoesDivergentes
+    ) {
+        String status;
+        if (dimensoesDivergentes && quantidadeNota == null) {
+            status = "REVISÃO MANUAL - AMBIGUIDADE DE MEDIDA E QUANTIDADE NÃO IDENTIFICADA; "
+                    + "ITEM APENAS NA NF (NÃO ALOCADO)";
+        } else if (dimensoesDivergentes) {
+            status = "REVISÃO MANUAL - AMBIGUIDADE DE MEDIDA; ITEM APENAS NA NF (NÃO ALOCADO)";
+        } else if (quantidadeNota == null) {
+            status = "REVISÃO MANUAL - QUANTIDADE NÃO IDENTIFICADA; "
+                    + "ITEM APENAS NA NF (NÃO ENCONTRADO NO FÍSICO)";
+        } else {
+            status = "ITEM APENAS NA NF (NÃO ENCONTRADO NO FÍSICO)";
+        }
+        return criarItemApenasNaNota(item, quantidadeNota, status);
+    }
+
+    private ResultadoConciliacao criarItemApenasNaNota(
+            ItemNotaFiscal item,
+            Double quantidadeNota,
+            String status
+    ) {
         return new ResultadoConciliacao(
                 "-",
                 "-",
                 item.getDescricaoProduto(),
                 "N/A",
                 null,
-                item.getQuantidade(),
+                quantidadeNota,
                 item.getNumeroNota(),
                 item.getNomeArquivoOrigem(),
                 status
