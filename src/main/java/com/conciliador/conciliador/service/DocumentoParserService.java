@@ -16,6 +16,7 @@ import java.io.File;
 import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -41,9 +42,12 @@ public class DocumentoParserService {
         String nomeOriginal = arquivo.getOriginalFilename();
         if (nomeOriginal == null) return "";
 
+        Path tempFile = null;
         try {
-            Path tempFile = Files.createTempFile("upload-", nomeOriginal);
-            arquivo.transferTo(tempFile.toFile());
+            tempFile = Files.createTempFile("upload-", obterSufixo(nomeOriginal));
+            try (InputStream input = arquivo.getInputStream()) {
+                Files.copy(input, tempFile, StandardCopyOption.REPLACE_EXISTING);
+            }
             File file = tempFile.toFile();
 
             String textoExtraido = "";
@@ -60,12 +64,23 @@ public class DocumentoParserService {
                 textoExtraido = executarOcrEmImagem(file);
             }
 
-            Files.deleteIfExists(tempFile);
             return textoExtraido;
-
         } catch (Exception e) {
             throw new RuntimeException("Erro ao processar o documento digital/imagem: " + e.getMessage(), e);
+        } finally {
+            if (tempFile != null) {
+                try {
+                    Files.deleteIfExists(tempFile);
+                } catch (Exception e) {
+                    throw new RuntimeException("Erro ao remover arquivo temporário do documento: " + e.getMessage(), e);
+                }
+            }
         }
+    }
+
+    private String obterSufixo(String nomeArquivo) {
+        int indiceExtensao = nomeArquivo.lastIndexOf('.');
+        return indiceExtensao >= 0 ? nomeArquivo.substring(indiceExtensao) : ".tmp";
     }
 
     public List<Double> extrairQuantidadesColuna(MultipartFile arquivo) {
