@@ -5,13 +5,13 @@ public class ResultadoConciliacao {
     private String descricaoInventario;
     private String descricaoNotaFiscal;
     private String estado;
-    private int quantidadeInventario;
+    private double quantidadeInventario;
     private double quantidadeNotaFiscal;
     private String numeroNotaFiscal;
     private String nomeArquivoNota;
     private String status;
 
-    public ResultadoConciliacao(String codigo, String descricaoInventario, String descricaoNotaFiscal, String estado, int quantidadeInventario, double quantidadeNotaFiscal, String getNumeroNota, String nomeArquivoNota, String status) {
+    public ResultadoConciliacao(String codigo, String descricaoInventario, String descricaoNotaFiscal, String estado, double quantidadeInventario, double quantidadeNotaFiscal, String getNumeroNota, String nomeArquivoNota, String status) {
         this.codigo = codigo;
         this.descricaoInventario = descricaoInventario;
         this.descricaoNotaFiscal = descricaoNotaFiscal;
@@ -36,8 +36,8 @@ public class ResultadoConciliacao {
     public String getEstado() { return estado; }
     public void setEstado(String estado) { this.estado = estado; }
 
-    public int getQuantidadeInventario() { return quantidadeInventario; }
-    public void setQuantidadeInventario(int quantidadeInventario) { this.quantidadeInventario = quantidadeInventario; }
+    public double getQuantidadeInventario() { return quantidadeInventario; }
+    public void setQuantidadeInventario(double quantidadeInventario) { this.quantidadeInventario = quantidadeInventario; }
 
     public double getQuantidadeNotaFiscal() { return quantidadeNotaFiscal; }
     public void setQuantidadeNotaFiscal(double quantidadeNotaFiscal) { this.quantidadeNotaFiscal = quantidadeNotaFiscal; }
