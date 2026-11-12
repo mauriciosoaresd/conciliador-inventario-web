@@ -59,3 +59,7 @@ Antes de iniciar, certifique-se de ter instalado em sua máquina:
   * **Linux (Ubuntu/Debian)**: `sudo apt-get install tesseract-ocr tesseract-ocr-por`
   * **macOS**: `brew install tesseract tesseract-lang`
   * **Windows**: Instalar o pacote Tesseract-OCR e registrar a variável de ambiente `TESSDATA_PREFIX`.
+
+## 🧪 Testes
+
+Execute a suíte com `.\mvnw.cmd test` no Windows ou `./mvnw test` no Linux/macOS. Os testes usam um banco H2 em memória configurado em `src/test/resources/application.properties`, separado do banco local persistente da aplicação.

@@ -18,7 +18,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.view;
 
-@SpringBootTest(properties = "spring.datasource.url=jdbc:h2:mem:conciliador-controller-test;DB_CLOSE_DELAY=-1")
+@SpringBootTest
 @AutoConfigureMockMvc
 class ConciliadorControllerIntegrationTest {
 
