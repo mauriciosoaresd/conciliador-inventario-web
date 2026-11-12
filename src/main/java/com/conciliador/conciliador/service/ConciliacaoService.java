@@ -6,7 +6,6 @@ import com.conciliador.conciliador.model.ResultadoConciliacao;
 import com.conciliador.conciliador.model.SinonimoDinamico;
 import com.conciliador.conciliador.repository.SinonimoDinamicoRepository;
 import com.conciliador.conciliador.service.MatchUtils;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.util.*;
@@ -16,8 +15,11 @@ import java.util.regex.Pattern;
 @Service
 public class ConciliacaoService {
 
-    @Autowired
-    private SinonimoDinamicoRepository sinonimoRepository;
+    private final SinonimoDinamicoRepository sinonimoRepository;
+
+    public ConciliacaoService(SinonimoDinamicoRepository sinonimoRepository) {
+        this.sinonimoRepository = sinonimoRepository;
+    }
 
     public List<ResultadoConciliacao> conciliarInventarioComDocumentos(
             List<ProdutoInventario> produtosInventario,
