@@ -60,12 +60,3 @@ Antes de iniciar, certifique-se de ter instalado em sua máquina:
   * **macOS**: `brew install tesseract tesseract-lang`
   * **Windows**: Instalar o pacote Tesseract-OCR e registrar a variável de ambiente `TESSDATA_PREFIX`.
 
----
-
-## ⚙️ Configuração e Execução
-
-### 1. Clonar o Repositório e Criar Branch de Feature
-```sh
-git clone [https://github.com/mauriciosoaresd/conciliador-inventario-web.git](https://github.com/mauriciosoaresd/conciliador-inventario-web.git)
-cd conciliador-inventario-web
-git checkout -b feature/conciliacao-hibrida
