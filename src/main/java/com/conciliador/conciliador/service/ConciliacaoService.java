@@ -39,7 +39,7 @@ public class ConciliacaoService {
         for (InventarioAgrupado inv : inventarioAgrupadoMap.values()) {
             ItemNotaFiscal itemMatch = null;
             String status = "OK";
-            double qtdNota = 0.0;
+            Double qtdNota = 0.0;
             double qtdInventario = inv.getQuantidadeTotal();
 
             // CAMADA 1: Match exato por Código/SKU
@@ -105,7 +105,11 @@ public class ConciliacaoService {
             // 3. Avaliação Quantitativa Final
             if (itemMatch != null) {
                 qtdNota = itemMatch.getQuantidade();
-                if (!status.startsWith("REVISÃO")) {
+                if (qtdNota == null) {
+                    status = status.startsWith("REVISÃO")
+                            ? status + "; QUANTIDADE NÃO IDENTIFICADA"
+                            : "REVISÃO MANUAL - QUANTIDADE NÃO IDENTIFICADA";
+                } else if (!status.startsWith("REVISÃO")) {
                     if (qtdInventario > qtdNota) {
                         status = "DIVERGENTE - SOBRA";
                     } else if (qtdInventario < qtdNota) {
@@ -137,6 +141,9 @@ public class ConciliacaoService {
                 String descNota = itemNaoMapeado.getDescricaoProduto();
 
                 if (isDescricaoProdutoValida(descNota)) {
+                    String statusItemNaoMapeado = itemNaoMapeado.getQuantidade() == null
+                            ? "REVISÃO MANUAL - QUANTIDADE NÃO IDENTIFICADA; ITEM APENAS NA NF (NÃO ENCONTRADO NO FÍSICO)"
+                            : "ITEM APENAS NA NF (NÃO ENCONTRADO NO FÍSICO)";
                     resultados.add(new ResultadoConciliacao(
                             "-",
                             "-",
@@ -146,7 +153,7 @@ public class ConciliacaoService {
                             itemNaoMapeado.getQuantidade(),
                             itemNaoMapeado.getNumeroNota(),
                             itemNaoMapeado.getNomeArquivoOrigem(),
-                            "ITEM APENAS NA NF (NÃO ENCONTRADO NO FÍSICO)"
+                            statusItemNaoMapeado
                     ));
                 }
             }
