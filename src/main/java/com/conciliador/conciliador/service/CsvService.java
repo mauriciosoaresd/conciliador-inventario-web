@@ -1,5 +1,6 @@
 package com.conciliador.conciliador.service;
 
+import com.conciliador.conciliador.exception.RequisicaoInvalidaException;
 import com.conciliador.conciliador.model.ProdutoInventario;
 import com.opencsv.bean.CsvToBeanBuilder;
 import org.springframework.stereotype.Service;
@@ -21,8 +22,10 @@ public class CsvService {
                     .withIgnoreLeadingWhiteSpace(true)
                     .build()
                     .parse();
-        } catch (Exception e) {
-            throw new RuntimeException("Erro ao processar o arquivo CSV de inventário: " + e.getMessage(), e);
+        } catch (java.io.IOException e) {
+            throw new RuntimeException("Erro ao ler o arquivo CSV de inventário.", e);
+        } catch (RuntimeException e) {
+            throw new RequisicaoInvalidaException("Não foi possível interpretar o CSV de inventário.", e);
         }
     }
 }

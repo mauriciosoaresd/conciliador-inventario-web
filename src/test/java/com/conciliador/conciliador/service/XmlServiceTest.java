@@ -1,6 +1,7 @@
 package com.conciliador.conciliador.service;
 
 import com.conciliador.conciliador.model.ItemNotaFiscal;
+import com.conciliador.conciliador.exception.RequisicaoInvalidaException;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockMultipartFile;
 
@@ -9,6 +10,7 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class XmlServiceTest {
 
@@ -39,6 +41,32 @@ class XmlServiceTest {
         );
 
         assertEquals(2.5, item.getQuantidade());
+    }
+
+    @Test
+    void deveLerXmlComNamespaces() {
+        ItemNotaFiscal item = lerItem(
+                "<n:nfe xmlns:n=\"urn:exemplo:nfe\"><n:det><n:prod>"
+                        + "<n:cProd>SKU-1</n:cProd><n:xProd>Cadeira executiva</n:xProd><n:qCom>2</n:qCom>"
+                        + "</n:prod></n:det></n:nfe>"
+        );
+
+        assertEquals("SKU-1", item.getCodigoProdutoFornecedor());
+        assertEquals(2.0, item.getQuantidade());
+    }
+
+    @Test
+    void deveRejeitarXmlComDeclaracaoDoctype() {
+        MockMultipartFile arquivo = new MockMultipartFile(
+                "documentos",
+                "nota.xml",
+                "application/xml",
+                ("<!DOCTYPE nfe [<!ENTITY texto \"conteudo\">]>"
+                        + "<nfe><item><descricao>&texto;</descricao></item></nfe>")
+                        .getBytes(StandardCharsets.UTF_8)
+        );
+
+        assertThrows(RequisicaoInvalidaException.class, () -> xmlService.lerXml(arquivo));
     }
 
     private ItemNotaFiscal lerItem(String xml) {

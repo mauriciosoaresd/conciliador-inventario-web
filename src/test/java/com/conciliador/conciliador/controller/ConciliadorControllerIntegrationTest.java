@@ -33,6 +33,27 @@ class ConciliadorControllerIntegrationTest {
     }
 
     @Test
+    void deveInformarFormatoNaoSuportadoComoErroDeRequisicao() throws Exception {
+        MockMultipartFile inventario = new MockMultipartFile(
+                "inventario",
+                "inventario.csv",
+                "text/csv",
+                "Codigo,Descricao,Quantidade\nSKU-1,Cadeira,1\n".getBytes(StandardCharsets.UTF_8)
+        );
+        MockMultipartFile documento = new MockMultipartFile(
+                "documentos",
+                "nota.txt",
+                "text/plain",
+                "documento".getBytes(StandardCharsets.UTF_8)
+        );
+
+        mockMvc.perform(multipart("/conciliar").file(inventario).file(documento))
+                .andExpect(status().isBadRequest())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers
+                        .jsonPath("$.error").value("Formato de documento não suportado. Envie XML, PDF, PNG, JPG ou JPEG."));
+    }
+
+    @Test
     void deveLerQuantidadeNasColunasDeNotasEscaneadas() throws Exception {
         MockMultipartFile inventario = new MockMultipartFile(
                 "inventario",
