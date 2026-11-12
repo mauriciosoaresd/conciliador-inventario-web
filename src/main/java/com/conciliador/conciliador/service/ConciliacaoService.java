@@ -29,7 +29,7 @@ public class ConciliacaoService {
         for (ProdutoInventario prod : produtosInventario) {
             String codigo = prod.getCodigo() != null ? prod.getCodigo().trim() : "SEM-CODIGO";
             inventarioAgrupadoMap.putIfAbsent(codigo, new InventarioAgrupado(prod));
-            inventarioAgrupadoMap.get(codigo).incrementarQuantidade();
+            inventarioAgrupadoMap.get(codigo).adicionarQuantidade(prod.getQuantidade());
         }
 
         List<ResultadoConciliacao> resultados = new ArrayList<>();
@@ -121,7 +121,7 @@ public class ConciliacaoService {
                     inv.getProdutoBase().getDescricao(),
                     itemMatch != null ? itemMatch.getDescricaoProduto() : "-",
                     inv.getProdutoBase().getEstado(),
-                    (int) qtdInventario,
+                    qtdInventario,
                     qtdNota,
                     itemMatch != null ? itemMatch.getNumeroNota() : null,
                     itemMatch != null ? itemMatch.getNomeArquivoOrigem() : null,
@@ -241,22 +241,22 @@ public class ConciliacaoService {
 
     private static class InventarioAgrupado {
         private final ProdutoInventario produtoBase;
-        private int quantidadeTotal;
+        private double quantidadeTotal;
 
         public InventarioAgrupado(ProdutoInventario produtoBase) {
             this.produtoBase = produtoBase;
             this.quantidadeTotal = 0;
         }
 
-        public void incrementarQuantidade() {
-            this.quantidadeTotal += 1;
+        public void adicionarQuantidade(double quantidade) {
+            this.quantidadeTotal += quantidade;
         }
 
         public ProdutoInventario getProdutoBase() {
             return produtoBase;
         }
 
-        public int getQuantidadeTotal() {
+        public double getQuantidadeTotal() {
             return quantidadeTotal;
         }
     }

@@ -67,4 +67,39 @@ class ConciliacaoRastreabilidadeTest {
         assertEquals("12345", resultado.getNumeroNotaFiscal(), "O número da nota fiscal deve ser preenchido corretamente.");
         assertEquals("nota_fiscal_12345.xml", resultado.getNomeArquivoNota(), "O nome do arquivo de origem deve ser preenchido corretamente.");
     }
+
+    @Test
+    @DisplayName("Deve somar as quantidades do inventário e preservar valores fracionários")
+    void deveSomarQuantidadeDoInventario() {
+        ProdutoInventario primeiro = criarProduto("PROD-002", 2.5);
+        ProdutoInventario segundo = criarProduto("PROD-002", 1.25);
+
+        List<ResultadoConciliacao> resultados = conciliacaoService.conciliarInventarioComDocumentos(
+                List.of(primeiro, segundo),
+                Collections.emptyList()
+        );
+
+        assertEquals(3.75, resultados.get(0).getQuantidadeInventario(), 0.000001);
+    }
+
+    @Test
+    @DisplayName("Deve considerar uma unidade quando a quantidade do inventário não foi informada")
+    void deveUsarUmaUnidadeQuandoQuantidadeNaoInformada() {
+        ProdutoInventario produto = criarProduto("PROD-003", null);
+
+        List<ResultadoConciliacao> resultados = conciliacaoService.conciliarInventarioComDocumentos(
+                List.of(produto),
+                Collections.emptyList()
+        );
+
+        assertEquals(1.0, resultados.get(0).getQuantidadeInventario(), 0.000001);
+    }
+
+    private ProdutoInventario criarProduto(String codigo, Double quantidade) {
+        ProdutoInventario produto = new ProdutoInventario();
+        produto.setCodigo(codigo);
+        produto.setDescricao("Produto de teste");
+        produto.setQuantidade(quantidade);
+        return produto;
+    }
 }

@@ -107,21 +107,6 @@ public class ConciliadorController {
                                 } catch (Exception ignored) {}
                             }
 
-                            // 2. BLINDAGEM HEURÍSTICA PARA DOCUMENTOS ESCANEADOS / RUIDOSOS
-                            // Se o arquivo for de imagem/ruído e a quantidade ficou presa em 1 por falha de OCR,
-                            // mas o nome do item sugere um lote/quantidade comum em gabaritos (ex: Racks, Webcams),
-                            // evitamos o erro clássico do OCR que confunde números.
-                            if (qtdExtraida == 1.0 && (nomeArquivo.contains("imagem") || nomeArquivo.contains("escaneada"))) {
-                                String descLower = linhaTrim.toLowerCase();
-
-                                // Heurísticas baseadas nos casos conhecidos de falha de OCR:
-                                if (descLower.contains("webcam") || descLower.contains("c397")) {
-                                    qtdExtraida = 5.0; // Valor correto esperado para a webcam no lote ruidoso
-                                } else if (descLower.contains("rack") && descLower.contains("570mm")) {
-                                    qtdExtraida = 4.0; // Valor correto esperado para o rack de piso no lote ruidoso
-                                }
-                            }
-
                             itemOcr.setQuantidade(qtdExtraida);
                             itemOcr.setNomeArquivoOrigem(nomeArquivo);
                             itemOcr.setNumeroNota(numeroNotaEncontrado);
