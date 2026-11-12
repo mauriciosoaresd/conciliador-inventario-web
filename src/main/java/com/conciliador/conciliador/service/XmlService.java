@@ -18,6 +18,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 
 @Service
 public class XmlService {
@@ -25,6 +26,7 @@ public class XmlService {
     public List<ItemNotaFiscal> lerXml(MultipartFile arquivo) {
         List<ItemNotaFiscal> itens = new ArrayList<>();
         String nomeArquivo = arquivo.getOriginalFilename(); // <--- Captura o nome do arquivo
+        String identificadorDocumento = UUID.randomUUID().toString();
 
         try (InputStream is = arquivo.getInputStream()) {
             DocumentBuilderFactory dbFactory = DocumentBuilderFactory.newInstance();
@@ -88,6 +90,7 @@ public class XmlService {
                 // Atribui corretamente os dados de rastreabilidade
                 item.setNumeroNota(numeroNota);
                 item.setNomeArquivoOrigem(nomeArquivo);
+                item.setIdentificadorDocumentoOrigem(identificadorDocumento);
 
                 if (descricao != null && !descricao.isEmpty()) {
                     itens.add(item);

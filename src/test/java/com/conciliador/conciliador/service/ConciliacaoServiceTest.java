@@ -81,9 +81,10 @@ class ConciliacaoServiceTest {
                 )
         );
 
-        assertEquals(1, resultados.size());
+        assertEquals(2, resultados.size());
         assertEquals(3.0, resultados.get(0).getQuantidadeNotaFiscal());
         assertEquals("OK", resultados.get(0).getStatus());
+        assertEquals("DETALHE DA NF (INCLUÍDO NO RESUMO)", resultados.get(1).getStatus());
     }
 
     @Test
@@ -99,9 +100,9 @@ class ConciliacaoServiceTest {
                 )
         );
 
-        assertEquals(2, resultados.size());
+        assertEquals(4, resultados.size());
         assertEquals("OK", resultados.get(0).getStatus());
-        assertEquals("OK", resultados.get(1).getStatus());
+        assertEquals("OK", resultados.get(2).getStatus());
     }
 
     @Test
@@ -125,7 +126,7 @@ class ConciliacaoServiceTest {
                 item("SKU-NF", "Cadeira executiva ergonômica", 2.0)
         );
 
-        assertEquals(1, resultados.size());
+        assertEquals(2, resultados.size());
         assertEquals("Cadeira executiva ergonômica", resultados.get(0).getDescricaoNotaFiscal());
         assertEquals("OK", resultados.get(0).getStatus());
     }
@@ -167,7 +168,7 @@ class ConciliacaoServiceTest {
         assertEquals(1, resultados.size());
         assertEquals("Mouse sem fio Logitech modelo MX", resultados.get(0).getDescricaoNotaFiscal());
         assertEquals("ITEM APENAS NA NF (NÃO ENCONTRADO NO FÍSICO)", resultados.get(0).getStatus());
-        assertEquals(0.0, resultados.get(0).getQuantidadeInventario());
+        assertNull(resultados.get(0).getQuantidadeInventario());
     }
 
     @Test
@@ -187,6 +188,61 @@ class ConciliacaoServiceTest {
         );
     }
 
+    @Test
+    void deveConsolidarDuasNotasEmResumoEManterDetalhesSeparados() {
+        ItemNotaFiscal itemNotaA = item("COD-A", "Cadeira executiva", 5.0);
+        itemNotaA.setIdentificadorDocumentoOrigem("documento-a");
+        itemNotaA.setNumeroNota("NF-A");
+        itemNotaA.setNomeArquivoOrigem("nota-a.xml");
+
+        ItemNotaFiscal itemNotaB = item("COD-B", "Cadeira executiva", 5.0);
+        itemNotaB.setIdentificadorDocumentoOrigem("documento-b");
+        itemNotaB.setNumeroNota("NF-B");
+        itemNotaB.setNomeArquivoOrigem("nota-b.xml");
+
+        List<ResultadoConciliacao> resultados = conciliacaoService.conciliarInventarioComDocumentos(
+                List.of(
+                        produto("SKU-1", "Cadeira executiva", 4.0),
+                        produto("SKU-2", "Cadeira executiva", 6.0)
+                ),
+                List.of(itemNotaA, itemNotaB)
+        );
+
+        assertEquals(3, resultados.size());
+        ResultadoConciliacao resumo = resultados.get(0);
+        assertEquals("SKU-1, SKU-2", resumo.getCodigo());
+        assertEquals(10.0, resumo.getQuantidadeInventario());
+        assertEquals(10.0, resumo.getQuantidadeNotaFiscal());
+        assertEquals("RESUMO DE 2 NFs", resumo.getNumeroNotaFiscal());
+        assertEquals("OK", resumo.getStatus());
+
+        assertEquals("NF-A", resultados.get(1).getNumeroNotaFiscal());
+        assertEquals("nota-a.xml", resultados.get(1).getNomeArquivoNota());
+        assertEquals(5.0, resultados.get(1).getQuantidadeNotaFiscal());
+        assertNull(resultados.get(1).getQuantidadeInventario());
+        assertEquals("NF-B", resultados.get(2).getNumeroNotaFiscal());
+        assertEquals("nota-b.xml", resultados.get(2).getNomeArquivoNota());
+        assertEquals(5.0, resultados.get(2).getQuantidadeNotaFiscal());
+        assertNull(resultados.get(2).getQuantidadeInventario());
+    }
+
+    @Test
+    void deveAgruparInventarioPorDescricaoMesmoComCodigosDiferentes() {
+        List<ResultadoConciliacao> resultados = conciliacaoService.conciliarInventarioComDocumentos(
+                List.of(
+                        produto("SKU-A", "Cadeira executiva", 1.0),
+                        produto("SKU-B", "Cadeira executiva", 2.0)
+                ),
+                List.of(item("SKU-NF", "Cadeira executiva", 3.0))
+        );
+
+        assertEquals(2, resultados.size());
+        assertEquals("SKU-A, SKU-B", resultados.get(0).getCodigo());
+        assertEquals(3.0, resultados.get(0).getQuantidadeInventario());
+        assertEquals(3.0, resultados.get(0).getQuantidadeNotaFiscal());
+        assertEquals("OK", resultados.get(0).getStatus());
+    }
+
     private List<ResultadoConciliacao> conciliar(ProdutoInventario produto, ItemNotaFiscal item) {
         return conciliacaoService.conciliarInventarioComDocumentos(List.of(produto), List.of(item));
     }
@@ -204,6 +260,7 @@ class ConciliacaoServiceTest {
         item.setCodigoProdutoFornecedor(codigo);
         item.setDescricaoProduto(descricao);
         item.setQuantidade(quantidade);
+        item.setIdentificadorDocumentoOrigem("documento-teste");
         return item;
     }
 }

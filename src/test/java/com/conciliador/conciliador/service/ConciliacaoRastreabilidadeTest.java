@@ -57,16 +57,18 @@ class ConciliacaoRastreabilidadeTest {
 
         // 4. Validações
         assertNotNull(resultados, "A lista de resultados não deve ser nula.");
-        assertEquals(1, resultados.size(), "Deve retornar exatamente um resultado de conciliação.");
+        assertEquals(2, resultados.size(), "Deve retornar resumo e detalhe da nota.");
 
         ResultadoConciliacao resultado = resultados.get(0);
         assertEquals("OK", resultado.getStatus());
         assertEquals(1.0, resultado.getQuantidadeInventario());
         assertEquals(1.0, resultado.getQuantidadeNotaFiscal());
+        assertEquals("RESUMO DE 1 NF", resultado.getNumeroNotaFiscal());
 
-        // Valida os novos campos de rastreabilidade
-        assertEquals("12345", resultado.getNumeroNotaFiscal(), "O número da nota fiscal deve ser preenchido corretamente.");
-        assertEquals("nota_fiscal_12345.xml", resultado.getNomeArquivoNota(), "O nome do arquivo de origem deve ser preenchido corretamente.");
+        ResultadoConciliacao detalhe = resultados.get(1);
+        assertEquals("12345", detalhe.getNumeroNotaFiscal(), "O número da nota fiscal deve ser preenchido corretamente.");
+        assertEquals("nota_fiscal_12345.xml", detalhe.getNomeArquivoNota(), "O nome do arquivo de origem deve ser preenchido corretamente.");
+        assertNull(detalhe.getQuantidadeInventario());
     }
 
     @Test

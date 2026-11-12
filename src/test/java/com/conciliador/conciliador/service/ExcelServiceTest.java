@@ -31,8 +31,30 @@ class ExcelServiceTest {
                 new ByteArrayInputStream(excelService.gerarRelatorioExcel(List.of(resultado)).readAllBytes())
         )) {
             var row = workbook.getSheetAt(0).getRow(1);
+            assertEquals(5.0, row.getCell(4).getNumericCellValue());
             assertEquals("NÃO IDENTIFICADA", row.getCell(5).getStringCellValue());
             assertEquals("REVISÃO MANUAL - QUANTIDADE NÃO IDENTIFICADA", row.getCell(8).getStringCellValue());
+        }
+    }
+
+    @Test
+    void deveExibirTracoNaQuantidadeDeInventarioDosDetalhes() throws Exception {
+        ResultadoConciliacao detalhe = new ResultadoConciliacao(
+                "-",
+                "-",
+                "Cadeira executiva",
+                "N/A",
+                null,
+                5.0,
+                "123",
+                "nota.pdf",
+                "DETALHE DA NF (INCLUÍDO NO RESUMO)"
+        );
+
+        try (XSSFWorkbook workbook = new XSSFWorkbook(
+                new ByteArrayInputStream(excelService.gerarRelatorioExcel(List.of(detalhe)).readAllBytes())
+        )) {
+            assertEquals("-", workbook.getSheetAt(0).getRow(1).getCell(4).getStringCellValue());
         }
     }
 }

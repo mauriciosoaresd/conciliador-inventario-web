@@ -56,6 +56,29 @@ class XmlServiceTest {
     }
 
     @Test
+    void deveAtribuirMesmoIdentificadorAItensDoDocumentoEUmNovoEntreArquivos() {
+        List<ItemNotaFiscal> itensPrimeiroArquivo = xmlService.lerXml(arquivoXml(
+                "<nota><item><descricao>Cadeira A</descricao></item>"
+                        + "<item><descricao>Cadeira B</descricao></item></nota>",
+                "nota.xml"
+        ));
+        List<ItemNotaFiscal> itensSegundoArquivo = xmlService.lerXml(arquivoXml(
+                "<nota><item><descricao>Cadeira A</descricao></item></nota>",
+                "nota.xml"
+        ));
+
+        assertEquals(2, itensPrimeiroArquivo.size());
+        assertEquals(
+                itensPrimeiroArquivo.get(0).getIdentificadorDocumentoOrigem(),
+                itensPrimeiroArquivo.get(1).getIdentificadorDocumentoOrigem()
+        );
+        org.junit.jupiter.api.Assertions.assertNotEquals(
+                itensPrimeiroArquivo.get(0).getIdentificadorDocumentoOrigem(),
+                itensSegundoArquivo.get(0).getIdentificadorDocumentoOrigem()
+        );
+    }
+
+    @Test
     void deveRejeitarXmlComDeclaracaoDoctype() {
         MockMultipartFile arquivo = new MockMultipartFile(
                 "documentos",
@@ -70,14 +93,17 @@ class XmlServiceTest {
     }
 
     private ItemNotaFiscal lerItem(String xml) {
-        MockMultipartFile arquivo = new MockMultipartFile(
+        List<ItemNotaFiscal> itens = xmlService.lerXml(arquivoXml(xml, "nota.xml"));
+        assertEquals(1, itens.size());
+        return itens.get(0);
+    }
+
+    private MockMultipartFile arquivoXml(String xml, String nome) {
+        return new MockMultipartFile(
                 "documentos",
-                "nota.xml",
+                nome,
                 "application/xml",
                 xml.getBytes(StandardCharsets.UTF_8)
         );
-        List<ItemNotaFiscal> itens = xmlService.lerXml(arquivo);
-        assertEquals(1, itens.size());
-        return itens.get(0);
     }
 }
