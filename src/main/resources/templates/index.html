@@ -220,7 +220,10 @@
             });
 
             if (!response.ok) {
-                throw new Error("Erro no servidor ao processar a conciliação.");
+                const errorBody = await response.json().catch(() => null);
+                throw new Error(errorBody && errorBody.error
+                    ? errorBody.error
+                    : "Erro no servidor ao processar a conciliação.");
             }
 
             const blob = await response.blob();
