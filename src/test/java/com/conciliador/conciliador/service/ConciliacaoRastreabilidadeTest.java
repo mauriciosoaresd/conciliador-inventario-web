@@ -60,8 +60,9 @@ class ConciliacaoRastreabilidadeTest {
         assertEquals(1, resultados.size(), "Deve retornar exatamente um resultado de conciliação.");
 
         ResultadoConciliacao resultado = resultados.get(0);
-        assertEquals("CONCILIADO", resultado.getStatus() != null ? "CONCILIADO" : resultado.getStatus(),
-                "O status deve indicar sucesso na conciliação.");
+        assertEquals("OK", resultado.getStatus());
+        assertEquals(1.0, resultado.getQuantidadeInventario());
+        assertEquals(1.0, resultado.getQuantidadeNotaFiscal());
 
         // Valida os novos campos de rastreabilidade
         assertEquals("12345", resultado.getNumeroNotaFiscal(), "O número da nota fiscal deve ser preenchido corretamente.");
