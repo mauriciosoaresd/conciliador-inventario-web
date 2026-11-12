@@ -5,7 +5,7 @@ public class ItemNotaFiscal {
     private String numeroNota;
     private String codigoProdutoFornecedor;
     private String descricaoProduto;
-    private double quantidade;
+    private Double quantidade;
     private String unidadeMedida;
     private double valorUnitario;
     private String nomeArquivoOrigem;
@@ -23,8 +23,8 @@ public class ItemNotaFiscal {
     public String getDescricaoProduto() { return descricaoProduto; }
     public void setDescricaoProduto(String descricaoProduto) { this.descricaoProduto = descricaoProduto; }
 
-    public double getQuantidade() { return quantidade; }
-    public void setQuantidade(double quantidade) { this.quantidade = quantidade; }
+    public Double getQuantidade() { return quantidade; }
+    public void setQuantidade(Double quantidade) { this.quantidade = quantidade; }
 
     public String getUnidadeMedida() { return unidadeMedida; }
     public void setUnidadeMedida(String unidadeMedida) { this.unidadeMedida = unidadeMedida; }

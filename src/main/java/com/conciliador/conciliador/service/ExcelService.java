@@ -62,7 +62,12 @@ public class ExcelService {
                 row.createCell(2).setCellValue(res.getDescricaoNotaFiscal() != null ? res.getDescricaoNotaFiscal() : "-");
                 row.createCell(3).setCellValue(res.getEstado() != null ? res.getEstado() : "");
                 row.createCell(4).setCellValue(res.getQuantidadeInventario());
-                row.createCell(5).setCellValue(res.getQuantidadeNotaFiscal());
+                Cell quantidadeNotaCell = row.createCell(5);
+                if (res.getQuantidadeNotaFiscal() == null) {
+                    quantidadeNotaCell.setCellValue("NÃO IDENTIFICADA");
+                } else {
+                    quantidadeNotaCell.setCellValue(res.getQuantidadeNotaFiscal());
+                }
 
                 // Preenchendo os novos campos de rastreabilidade
                 row.createCell(6).setCellValue(res.getNumeroNotaFiscal() != null ? res.getNumeroNotaFiscal() : "-");

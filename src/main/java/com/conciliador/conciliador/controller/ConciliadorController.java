@@ -97,12 +97,15 @@ public class ConciliadorController {
                             itemOcr.setCodigoProdutoFornecedor("OCR-GENERIC");
                             itemOcr.setDescricaoProduto(linhaTrim);
 
-                            double qtdExtraida = 1.0;
+                            Double qtdExtraida = null;
                             if (documentoParserService.contemValorMonetario(linhaTrim)) {
                                 if (quantidadesColunaAlinhadas) {
                                     qtdExtraida = quantidadesColuna.get(indiceLinhaProduto);
                                 } else {
-                                    qtdExtraida = documentoParserService.extrairQuantidadeDaLinha(linhaTrim).orElse(1.0);
+                                    var quantidadeDetectada = documentoParserService.extrairQuantidadeDaLinha(linhaTrim);
+                                    if (quantidadeDetectada.isPresent()) {
+                                        qtdExtraida = quantidadeDetectada.getAsDouble();
+                                    }
                                 }
                                 indiceLinhaProduto++;
                             }

@@ -11,7 +11,7 @@ Aplicação web em Java e Spring Boot para comparar um inventário em CSV com it
 - Cadastro de sinônimos no H2 quando uma correspondência por descrição alcança o limite de confiança implementado.
 - Geração de relatório `.xlsx` com quantidades, rastreabilidade do documento de origem e status da conciliação.
 
-O OCR é sensível à qualidade e à disposição das colunas. Em imagens, a aplicação tenta reconhecer a coluna de quantidades; se não conseguir alinhar seus valores às linhas dos itens, usa a quantidade extraída do texto e, quando não a identifica, assume `1`. Confira o relatório quando o documento estiver inclinado, pouco legível ou tiver um layout diferente.
+O OCR é sensível à qualidade e à disposição das colunas. Em imagens, a aplicação tenta reconhecer a coluna de quantidades; se não conseguir alinhar seus valores às linhas dos itens, usa a quantidade extraída do texto. Quando a quantidade não é identificada no OCR ou está ausente/inválida no XML, o relatório marca o item como `REVISÃO MANUAL - QUANTIDADE NÃO IDENTIFICADA` e não assume uma quantidade. A célula correspondente no Excel exibe `NÃO IDENTIFICADA`. Confira esses casos manualmente, especialmente quando o documento estiver inclinado, pouco legível ou tiver um layout diferente. A quantidade padrão 1 usada para linhas sem quantidade no CSV do inventário é independente desse tratamento fiscal.
 
 ## Tecnologias
 

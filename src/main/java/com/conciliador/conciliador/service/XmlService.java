@@ -54,13 +54,7 @@ public class XmlService {
                 String descricao = pegarValorTag(elemento, new String[]{"xProd", "descricao", "descricaoProduto"});
                 String qtdStr = pegarValorTag(elemento, new String[]{"qCom", "qTrib", "quantidade", "qtd", "qtdItem", "quant", "QTD"});
 
-                try {
-                    item.setQuantidade(qtdStr != null && !qtdStr.isEmpty()
-                            ? Double.parseDouble(qtdStr.replace(",", "."))
-                            : 1.0);
-                } catch (NumberFormatException e) {
-                    item.setQuantidade(1.0);
-                }
+                item.setQuantidade(parseQuantidade(qtdStr));
 
                 item.setCodigoProdutoFornecedor(codigo);
                 item.setDescricaoProduto(descricao);
@@ -68,12 +62,6 @@ public class XmlService {
                 // Atribui corretamente os dados de rastreabilidade
                 item.setNumeroNota(numeroNota);
                 item.setNomeArquivoOrigem(nomeArquivo);
-
-                try {
-                    item.setQuantidade(qtdStr != null && !qtdStr.isEmpty() ? Double.parseDouble(qtdStr.replace(",", ".")) : 1.0);
-                } catch (NumberFormatException e) {
-                    item.setQuantidade(1.0);
-                }
 
                 if (descricao != null && !descricao.isEmpty()) {
                     itens.add(item);
@@ -93,5 +81,17 @@ public class XmlService {
             }
         }
         return "";
+    }
+
+    private Double parseQuantidade(String quantidade) {
+        if (quantidade == null || quantidade.isBlank()) {
+            return null;
+        }
+        try {
+            double valor = Double.parseDouble(quantidade.replace(",", "."));
+            return Double.isFinite(valor) ? valor : null;
+        } catch (NumberFormatException e) {
+            return null;
+        }
     }
 }

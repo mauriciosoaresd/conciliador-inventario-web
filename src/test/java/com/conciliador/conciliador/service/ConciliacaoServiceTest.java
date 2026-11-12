@@ -15,6 +15,7 @@ import java.util.Collections;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
 
@@ -54,6 +55,20 @@ class ConciliacaoServiceTest {
         assertEquals(1.0, resultado.getQuantidadeInventario());
         assertEquals(3.0, resultado.getQuantidadeNotaFiscal());
         assertEquals("DIVERGENTE - FALTA", resultado.getStatus());
+    }
+
+    @Test
+    void deveExigirRevisaoQuandoQuantidadeFiscalNaoFoiIdentificada() {
+        ItemNotaFiscal itemSemQuantidade = item("SKU-1", "Cadeira executiva", 1.0);
+        itemSemQuantidade.setQuantidade(null);
+
+        ResultadoConciliacao resultado = conciliar(
+                produto("SKU-1", "Cadeira executiva", 5.0),
+                itemSemQuantidade
+        ).get(0);
+
+        assertNull(resultado.getQuantidadeNotaFiscal());
+        assertEquals("REVISÃO MANUAL - QUANTIDADE NÃO IDENTIFICADA", resultado.getStatus());
     }
 
     @Test
@@ -106,6 +121,23 @@ class ConciliacaoServiceTest {
         assertEquals("Mouse sem fio Logitech modelo MX", resultados.get(0).getDescricaoNotaFiscal());
         assertEquals("ITEM APENAS NA NF (NÃO ENCONTRADO NO FÍSICO)", resultados.get(0).getStatus());
         assertEquals(0.0, resultados.get(0).getQuantidadeInventario());
+    }
+
+    @Test
+    void deveSinalizarQuantidadeNaoIdentificadaEmItemExclusivoDaNota() {
+        ItemNotaFiscal itemSemQuantidade = item("SKU-NF", "Mouse sem fio Logitech modelo MX", 1.0);
+        itemSemQuantidade.setQuantidade(null);
+
+        ResultadoConciliacao resultado = conciliacaoService.conciliarInventarioComDocumentos(
+                Collections.emptyList(),
+                List.of(itemSemQuantidade)
+        ).get(0);
+
+        assertNull(resultado.getQuantidadeNotaFiscal());
+        assertEquals(
+                "REVISÃO MANUAL - QUANTIDADE NÃO IDENTIFICADA; ITEM APENAS NA NF (NÃO ENCONTRADO NO FÍSICO)",
+                resultado.getStatus()
+        );
     }
 
     private List<ResultadoConciliacao> conciliar(ProdutoInventario produto, ItemNotaFiscal item) {
