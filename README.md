@@ -8,6 +8,8 @@ Aplicação web em Java e Spring Boot para comparar um inventário em CSV com it
 - Leitura de notas fiscais em XML, incluindo tags comuns de NF-e (`cProd`, `xProd`, `qCom`) e estruturas simplificadas.
 - Extração de texto de PDFs e OCR de PDFs digitalizados e imagens PNG, JPG ou JPEG.
 - Correspondência primeiro por código e, quando necessário, por similaridade textual, com validações para números e dimensões.
+- Agrupamento das linhas repetidas da nota fiscal pelo código do produto ou, quando ele não existe, pela descrição normalizada; as quantidades identificadas são somadas.
+- Agrupamento do inventário por código; produtos sem código são agrupados pela descrição normalizada, evitando misturar descrições diferentes.
 - Cadastro de sinônimos no H2 quando uma correspondência por descrição alcança o limite de confiança implementado.
 - Geração de relatório `.xlsx` com quantidades, rastreabilidade do documento de origem e status da conciliação.
 
@@ -46,6 +48,8 @@ No Linux ou macOS:
 
 Acesse `http://localhost:8080`. Envie um CSV de inventário e um ou mais documentos XML, PDF ou imagens PNG/JPG/JPEG para baixar o relatório Excel.
 
+São aceitos arquivos com extensão `.xml`, `.pdf`, `.png`, `.jpg` ou `.jpeg` para os documentos fiscais. O XML é analisado com suporte a namespaces e declarações `DOCTYPE` são rejeitadas. Arquivos vazios, extensões não suportadas ou CSV que não possa ser interpretado são informados como erro na interface.
+
 ### Formato do CSV
 
 O arquivo deve ser UTF-8, separado por vírgulas, com os cabeçalhos abaixo. `Quantidade` é opcional; se ausente ou vazia, cada linha representa uma unidade.
@@ -56,13 +60,15 @@ INV-001,Notebook Dell Latitude,Dell,Latitude,Bom,,2
 INV-002,Cadeira de escritório,,,Regular,,1
 ```
 
-Os nomes dos cabeçalhos devem corresponder aos apresentados no exemplo. A quantidade pode ser fracionária. Linhas com o mesmo código são agrupadas e suas quantidades somadas.
+Os nomes dos cabeçalhos devem corresponder aos apresentados no exemplo. A quantidade pode ser fracionária. Linhas com o mesmo código são agrupadas e suas quantidades somadas. Quando o código estiver vazio, a descrição normalizada é usada para agrupar linhas equivalentes; descrições diferentes permanecem separadas.
+
+Na conciliação, linhas fiscais repetidas com o mesmo código são agrupadas e suas quantidades somadas. Se o código fiscal estiver ausente ou for gerado pelo OCR, a descrição normalizada é usada para agrupar linhas equivalentes. A correspondência por descrição é aproximada e pode exigir revisão, especialmente para descrições curtas ou ambíguas.
 
 ## Banco de dados
 
 Ao executar localmente, o perfil padrão (`local`) usa H2 persistente em `./data/conciliadordb`, relativo ao diretório de onde a aplicação foi iniciada. O usuário padrão é `sa`, sem senha, e o Hibernate atualiza o schema (`ddl-auto=update`). O console do H2 fica desabilitado por padrão; para habilitá-lo somente em desenvolvimento, execute com `--spring.h2.console.enabled=true`.
 
-As configurações locais podem ser sobrescritas pelas variáveis `CONCILIADOR_DB_URL`, `CONCILIADOR_DB_USERNAME` e `CONCILIADOR_DB_PASSWORD`. Para iniciar com o perfil `prod`, defina também essas três variáveis: nesse perfil, o console fica desabilitado e o Hibernate apenas valida o schema (`ddl-auto=validate`), sem atualizá-lo automaticamente. O projeto configura H2; MySQL/PostgreSQL e migrações de schema ainda não estão configurados.
+As configurações locais podem ser sobrescritas pelas variáveis `CONCILIADOR_DB_URL`, `CONCILIADOR_DB_USERNAME` e `CONCILIADOR_DB_PASSWORD`. Para iniciar com o perfil `prod`, defina também essas três variáveis: nesse perfil, o console fica desabilitado e o Hibernate apenas valida o schema (`ddl-auto=validate`), sem atualizá-lo automaticamente. Apesar do nome do perfil, ele ainda usa o driver H2; portanto, não constitui configuração pronta para produção com MySQL ou PostgreSQL. O projeto não inclui esses drivers nem migrações de schema.
 
 O diretório `data/` contém somente o banco local e não é versionado. Faça cópias de segurança desse arquivo antes de removê-lo ou substituí-lo.
 
