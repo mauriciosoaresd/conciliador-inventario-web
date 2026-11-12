@@ -1,65 +1,81 @@
-# 📦 Motor Híbrido de Conciliação de Inventário
+# Conciliador de Inventário
 
-Sistema corporativo de conciliação e auditoria automatizada de inventários físicos versus documentos fiscais (XML, PDF e Imagens/OCR). Desenvolvido em **Java 21 / Spring Boot** com arquitetura desacoplada, motor de correspondência híbrido (*Hybrid Matching Engine*) e aprendizado contínuo de sinônimos via JPA.
+Aplicação web em Java e Spring Boot para comparar um inventário em CSV com itens extraídos de documentos fiscais e gerar um relatório Excel. A aplicação usa correspondência por código e similaridade de descrições; resultados baseados em OCR podem exigir conferência manual, pois a leitura depende da qualidade e do layout do documento.
 
----
+## Funcionalidades
 
-## 🚀 Funcionalidades Principais
+- Importação de inventário em CSV, com soma das quantidades de linhas que compartilham o mesmo código.
+- Leitura de notas fiscais em XML, incluindo tags comuns de NF-e (`cProd`, `xProd`, `qCom`) e estruturas simplificadas.
+- Extração de texto de PDFs e OCR de PDFs digitalizados e imagens PNG, JPG ou JPEG.
+- Correspondência primeiro por código e, quando necessário, por similaridade textual, com validações para números e dimensões.
+- Cadastro de sinônimos no H2 quando uma correspondência por descrição alcança o limite de confiança implementado.
+- Geração de relatório `.xlsx` com quantidades, rastreabilidade do documento de origem e status da conciliação.
 
-* **Motor Híbrido de Correspondência (Hybrid Matching Engine)**:
-  * **Stemming (Redução de Sufixos)**: Agrupamento inteligente de variações morfológicas (ex: *cadeira* / *cadeiras*).
-  * **Distância de Levenshtein (Fuzzy Matching)**: Tolerância a erros de digitação e variações ortográficas simples.
-  * **Índice de Jaccard**: Cálculo de similaridade baseado em conjuntos de termos sobrepostos.
-  * **Blindagem de Especificações Técnicas**: Validação numérica automática (capacidades, BTUs, potências) para evitar falsos positivos entre modelos diferentes do mesmo fabricante.
-  * **Expressões Regulares (Regex)**: Detecção e validação de dimensões de produtos (ex: `120x60cm`) para prevenção de falsos positivos por ambiguidade de medida.
+O OCR é sensível à qualidade e à disposição das colunas. Em imagens, a aplicação tenta reconhecer a coluna de quantidades; se não conseguir alinhar seus valores às linhas dos itens, usa a quantidade extraída do texto e, quando não a identifica, assume `1`. Confira o relatório quando o documento estiver inclinado, pouco legível ou tiver um layout diferente.
 
-* **Auto-aprendizagem de Sinônimos (JPA)**:
-  * Cadastro automático e dinâmico de termos equivalentes na base de dados quando a confiança da correspondência for superior a 85%.
+## Tecnologias
 
-* **Processamento Polivalente de Documentos**:
-  * **XML (NFe)**: Parser flexível para tags oficiais brasileiras (`cProd`, `xProd`, `qCom`) e estruturas simplificadas.
-  * **PDF & Imagens (OCR)**: Leitura de documentos não estruturados via **Apache PDFBox** e **Tess4J (Tesseract OCR)**, com blindagem contra ruídos de cabeçalho e rodapé.
+- Java 21 e Spring Boot 4.1.2
+- Spring MVC, Thymeleaf e Spring Data JPA
+- H2 como único banco configurado neste projeto
+- OpenCSV, Apache POI, Apache PDFBox, Tess4J/Tesseract e Apache Commons Text
 
-* **Auditoria de Itens Órfãos e Exclusivos**:
-  * Identificação de itens físicos não encontrados nas notas (`NÃO ENCONTRADO NO DOCUMENTO`).
-  * Identificação de itens exclusivos de notas fiscais sem cadastro físico prévio (`ITEM APENAS NA NF`).
-  * Formatação limpa com preenchimento por traços (`-`) em colunas sem correspondência para evitar poluição visual.
+MySQL e PostgreSQL não estão configurados: o projeto não inclui seus drivers nem perfis de conexão.
 
-* **Exportação em Excel (.xlsx)**:
-  * Geração automática de relatórios categorizados por status (`OK`, `DIVERGENTE - SOBRA`, `DIVERGENTE - FALTA`, `NÃO ENCONTRADO NO DOCUMENTO`, `ITEM APENAS NA NF`, `REVISÃO MANUAL`).
+## Pré-requisitos
 
----
+- JDK 21.
+- Tess4J/Tesseract é usado para processar imagens e documentos digitalizados.
+- O modelo de idioma português está incluído em `src/main/resources/tessdata/por.traineddata`.
 
-## 🛠️ Tecnologias Utilizadas
+O Maven Wrapper está incluído no repositório, portanto não é necessário instalar Maven separadamente.
 
-* **Linguagem**: Java 21
-* **Framework Backend**: Spring Boot
-  * Spring Data JPA
-  * Spring Web (MVC)
-  * Thymeleaf
-* **Banco de Dados**:
-  * H2 Database (In-Memory / Desenvolvimento & Testes)
-  * MySQL / PostgreSQL (Ambiente de Produção)
-* **Bibliotecas de Processamento**:
-  * Apache POI (Geração de planilhas Excel)
-  * Apache PDFBox (Extração de texto de PDFs)
-  * Tess4J / Tesseract OCR (Reconhecimento óptico de caracteres)
-* **Frontend**:
-  * HTML5 / CSS3 / JavaScript (Fetch API / Async)
+## Executar a aplicação
 
----
+Na raiz do repositório, execute:
 
-## 📋 Pré-requisitos
+```powershell
+.\mvnw.cmd spring-boot:run
+```
 
-Antes de iniciar, certifique-se de ter instalado em sua máquina:
+No Linux ou macOS:
 
-* **JDK 21** ou superior.
-* **Maven 3.8+**.
-* **Tesseract OCR** (necessário para o processamento de imagens):
-  * **Linux (Ubuntu/Debian)**: `sudo apt-get install tesseract-ocr tesseract-ocr-por`
-  * **macOS**: `brew install tesseract tesseract-lang`
-  * **Windows**: Instalar o pacote Tesseract-OCR e registrar a variável de ambiente `TESSDATA_PREFIX`.
+```bash
+./mvnw spring-boot:run
+```
 
-## 🧪 Testes
+Acesse `http://localhost:8080`. Envie um CSV de inventário e um ou mais documentos XML, PDF ou imagens PNG/JPG/JPEG para baixar o relatório Excel.
 
-Execute a suíte com `.\mvnw.cmd test` no Windows ou `./mvnw test` no Linux/macOS. Os testes usam um banco H2 em memória configurado em `src/test/resources/application.properties`, separado do banco local persistente da aplicação.
+### Formato do CSV
+
+O arquivo deve ser UTF-8, separado por vírgulas, com os cabeçalhos abaixo. `Quantidade` é opcional; se ausente ou vazia, cada linha representa uma unidade.
+
+```csv
+Codigo,Descricao,Marca,Modelo,Estado,Imagem,Quantidade
+INV-001,Notebook Dell Latitude,Dell,Latitude,Bom,,2
+INV-002,Cadeira de escritório,,,Regular,,1
+```
+
+Os nomes dos cabeçalhos devem corresponder aos apresentados no exemplo. A quantidade pode ser fracionária. Linhas com o mesmo código são agrupadas e suas quantidades somadas.
+
+## Banco de dados
+
+Ao executar a aplicação, o perfil padrão usa H2 persistente em arquivo no caminho `./data/conciliadordb`, relativo ao diretório de onde a aplicação foi iniciada. O usuário padrão é `sa`, sem senha. O Hibernate atualiza o schema existente (`ddl-auto=update`).
+
+O console do H2 está habilitado em `http://localhost:8080/h2-console`. Para conectar, use a URL JDBC `jdbc:h2:file:./data/conciliadordb`, usuário `sa` e senha vazia.
+
+## Testes
+
+Os testes usam um banco H2 em memória, configurado em `src/test/resources/application.properties`, com o schema criado e removido para a execução. Esse banco é separado do arquivo persistente usado pela aplicação. A suíte também contém testes de OCR com imagens em `src/test/resources/ocr/` e, por isso, requer Tesseract instalado.
+
+Execute todos os testes:
+
+```powershell
+.\mvnw.cmd test
+```
+
+No Linux ou macOS:
+
+```bash
+./mvnw test
+```
