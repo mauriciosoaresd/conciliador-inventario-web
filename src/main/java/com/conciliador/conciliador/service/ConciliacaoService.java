@@ -27,13 +27,21 @@ public class ConciliacaoService {
 
         // 1. Agrupa o inventário por Código, somando a quantidade real contada
         Map<String, InventarioAgrupado> inventarioAgrupadoMap = new LinkedHashMap<>();
+        int produtoSemIdentificacao = 0;
 
         for (ProdutoInventario prod : produtosInventario) {
-            String codigo = prod.getCodigo() != null ? prod.getCodigo().trim() : "SEM-CODIGO";
-            inventarioAgrupadoMap.putIfAbsent(codigo, new InventarioAgrupado(prod));
-            inventarioAgrupadoMap.get(codigo).adicionarQuantidade(prod.getQuantidade());
+            String codigo = normalizarCodigo(prod.getCodigo());
+            String descricao = MatchUtils.normalizar(prod.getDescricao());
+            String chave = codigo != null
+                    ? "CODIGO:" + codigo
+                    : descricao.isEmpty()
+                            ? "SEM-IDENTIFICACAO:" + produtoSemIdentificacao++
+                            : "DESCRICAO:" + descricao;
+            inventarioAgrupadoMap.putIfAbsent(chave, new InventarioAgrupado(prod));
+            inventarioAgrupadoMap.get(chave).adicionarQuantidade(prod.getQuantidade());
         }
 
+        List<ItemNotaFiscal> itensNotaAgrupados = agruparItensNota(itensNotas);
         List<ResultadoConciliacao> resultados = new ArrayList<>();
         Set<Integer> indicesItensNotaConsumidos = new HashSet<>();
 
@@ -45,11 +53,10 @@ public class ConciliacaoService {
             double qtdInventario = inv.getQuantidadeTotal();
 
             // CAMADA 1: Match exato por Código/SKU
-            for (int i = 0; i < itensNotas.size(); i++) {
-                ItemNotaFiscal item = itensNotas.get(i);
+            for (int i = 0; i < itensNotaAgrupados.size(); i++) {
+                ItemNotaFiscal item = itensNotaAgrupados.get(i);
                 if (!indicesItensNotaConsumidos.contains(i) &&
-                        item.getCodigoProdutoFornecedor() != null &&
-                        item.getCodigoProdutoFornecedor().equalsIgnoreCase(inv.getProdutoBase().getCodigo())) {
+                        mesmoCodigo(item.getCodigoProdutoFornecedor(), inv.getProdutoBase().getCodigo())) {
                     itemMatch = item;
                     indicesItensNotaConsumidos.add(i);
                     break;
@@ -64,10 +71,11 @@ public class ConciliacaoService {
                 ItemNotaFiscal melhorCandidato = null;
                 int melhorIndice = -1;
 
-                for (int i = 0; i < itensNotas.size(); i++) {
+                for (int i = 0; i < itensNotaAgrupados.size(); i++) {
                     if (indicesItensNotaConsumidos.contains(i)) continue;
 
-                    ItemNotaFiscal item = itensNotas.get(i);
+                    ItemNotaFiscal item = itensNotaAgrupados.get(i);
+                    if (item.getDescricaoProduto() == null || item.getDescricaoProduto().isBlank()) continue;
                     String descNotaNorm = aplicarSinonimosDinamicos(MatchUtils.normalizar(item.getDescricaoProduto()));
 
                     double escoreJaccard = MatchUtils.calcularSimilaridadeJaccardComStemming(descInvNorm, descNotaNorm);
@@ -137,9 +145,9 @@ public class ConciliacaoService {
 
         // 4. Adiciona ao relatório APENAS os itens reais da Nota Fiscal que NÃO foram consumidos,
         // exibindo traços nas colunas do inventário físico ausente.
-        for (int i = 0; i < itensNotas.size(); i++) {
+        for (int i = 0; i < itensNotaAgrupados.size(); i++) {
             if (!indicesItensNotaConsumidos.contains(i)) {
-                ItemNotaFiscal itemNaoMapeado = itensNotas.get(i);
+                ItemNotaFiscal itemNaoMapeado = itensNotaAgrupados.get(i);
                 String descNota = itemNaoMapeado.getDescricaoProduto();
 
                 if (isDescricaoProdutoValida(descNota)) {
@@ -162,6 +170,45 @@ public class ConciliacaoService {
         }
 
         return resultados;
+    }
+
+    private List<ItemNotaFiscal> agruparItensNota(List<ItemNotaFiscal> itensNota) {
+        Map<String, ItemNotaFiscalAgrupado> grupos = new LinkedHashMap<>();
+        int itemSemIdentificacao = 0;
+
+        for (ItemNotaFiscal item : itensNota) {
+            String codigo = normalizarCodigo(item.getCodigoProdutoFornecedor());
+            String descricao = MatchUtils.normalizar(item.getDescricaoProduto());
+            String chave = codigo != null && !codigo.equals("OCR-GENERIC")
+                    ? "CODIGO:" + codigo
+                    : descricao.isEmpty()
+                            ? "SEM-IDENTIFICACAO:" + itemSemIdentificacao++
+                            : "DESCRICAO:" + descricao;
+
+            ItemNotaFiscalAgrupado grupo = grupos.get(chave);
+            if (grupo == null) {
+                grupos.put(chave, new ItemNotaFiscalAgrupado(item));
+            } else {
+                grupo.adicionar(item);
+            }
+        }
+
+        return grupos.values().stream().map(ItemNotaFiscalAgrupado::paraItemNotaFiscal).toList();
+    }
+
+    private String normalizarCodigo(String codigo) {
+        if (codigo == null || codigo.isBlank()) {
+            return null;
+        }
+        return codigo.trim().toUpperCase(Locale.ROOT);
+    }
+
+    private boolean mesmoCodigo(String codigoNota, String codigoInventario) {
+        String codigoNotaNormalizado = normalizarCodigo(codigoNota);
+        String codigoInventarioNormalizado = normalizarCodigo(codigoInventario);
+        return codigoNotaNormalizado != null
+                && !codigoNotaNormalizado.equals("OCR-GENERIC")
+                && codigoNotaNormalizado.equals(codigoInventarioNormalizado);
     }
 
     /**
@@ -267,6 +314,50 @@ public class ConciliacaoService {
 
         public double getQuantidadeTotal() {
             return quantidadeTotal;
+        }
+    }
+
+    private static class ItemNotaFiscalAgrupado {
+        private final ItemNotaFiscal itemBase;
+        private Double quantidadeTotal;
+        private final Set<String> numerosNota = new LinkedHashSet<>();
+        private final Set<String> nomesArquivo = new LinkedHashSet<>();
+
+        private ItemNotaFiscalAgrupado(ItemNotaFiscal itemBase) {
+            this.itemBase = itemBase;
+            this.quantidadeTotal = itemBase.getQuantidade();
+            adicionarRastreabilidade(itemBase);
+        }
+
+        private void adicionar(ItemNotaFiscal item) {
+            if (quantidadeTotal == null || item.getQuantidade() == null) {
+                quantidadeTotal = null;
+            } else {
+                quantidadeTotal += item.getQuantidade();
+            }
+            adicionarRastreabilidade(item);
+        }
+
+        private void adicionarRastreabilidade(ItemNotaFiscal item) {
+            if (item.getNumeroNota() != null && !item.getNumeroNota().isBlank()) {
+                numerosNota.add(item.getNumeroNota());
+            }
+            if (item.getNomeArquivoOrigem() != null && !item.getNomeArquivoOrigem().isBlank()) {
+                nomesArquivo.add(item.getNomeArquivoOrigem());
+            }
+        }
+
+        private ItemNotaFiscal paraItemNotaFiscal() {
+            ItemNotaFiscal itemAgrupado = new ItemNotaFiscal();
+            itemAgrupado.setCnpjEmitente(itemBase.getCnpjEmitente());
+            itemAgrupado.setNumeroNota(String.join(", ", numerosNota));
+            itemAgrupado.setCodigoProdutoFornecedor(itemBase.getCodigoProdutoFornecedor());
+            itemAgrupado.setDescricaoProduto(itemBase.getDescricaoProduto());
+            itemAgrupado.setQuantidade(quantidadeTotal);
+            itemAgrupado.setUnidadeMedida(itemBase.getUnidadeMedida());
+            itemAgrupado.setValorUnitario(itemBase.getValorUnitario());
+            itemAgrupado.setNomeArquivoOrigem(String.join(", ", nomesArquivo));
+            return itemAgrupado;
         }
     }
 }
