@@ -58,6 +58,53 @@ class ConciliacaoServiceTest {
     }
 
     @Test
+    void deveSomarLinhasFiscaisRepetidasComMesmoCodigo() {
+        ItemNotaFiscal primeiraLinha = item("SKU-1", "Cadeira executiva", 1.0);
+        ItemNotaFiscal segundaLinha = item("SKU-1", "Cadeira executiva", 2.0);
+
+        ResultadoConciliacao resultado = conciliacaoService.conciliarInventarioComDocumentos(
+                List.of(produto("SKU-1", "Cadeira executiva", 4.0)),
+                List.of(primeiraLinha, segundaLinha)
+        ).get(0);
+
+        assertEquals(3.0, resultado.getQuantidadeNotaFiscal());
+        assertEquals("DIVERGENTE - SOBRA", resultado.getStatus());
+    }
+
+    @Test
+    void deveSomarLinhasFiscaisRepetidasSemCodigoPelaDescricao() {
+        List<ResultadoConciliacao> resultados = conciliacaoService.conciliarInventarioComDocumentos(
+                List.of(produto(null, "Cadeira executiva", 3.0)),
+                List.of(
+                        item(null, "Cadeira executiva", 1.0),
+                        item(null, "Cadeira executiva", 2.0)
+                )
+        );
+
+        assertEquals(1, resultados.size());
+        assertEquals(3.0, resultados.get(0).getQuantidadeNotaFiscal());
+        assertEquals("OK", resultados.get(0).getStatus());
+    }
+
+    @Test
+    void naoDeveAgruparProdutosSemCodigoComDescricoesDiferentes() {
+        List<ResultadoConciliacao> resultados = conciliacaoService.conciliarInventarioComDocumentos(
+                List.of(
+                        produto(null, "Cadeira executiva modelo 123", 1.0),
+                        produto(null, "Mouse óptico sem fio modelo 456", 1.0)
+                ),
+                List.of(
+                        item(null, "Cadeira executiva modelo 123", 1.0),
+                        item(null, "Mouse óptico sem fio modelo 456", 1.0)
+                )
+        );
+
+        assertEquals(2, resultados.size());
+        assertEquals("OK", resultados.get(0).getStatus());
+        assertEquals("OK", resultados.get(1).getStatus());
+    }
+
+    @Test
     void deveExigirRevisaoQuandoQuantidadeFiscalNaoFoiIdentificada() {
         ItemNotaFiscal itemSemQuantidade = item("SKU-1", "Cadeira executiva", 1.0);
         itemSemQuantidade.setQuantidade(null);
