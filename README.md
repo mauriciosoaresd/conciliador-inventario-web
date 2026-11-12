@@ -60,9 +60,11 @@ Os nomes dos cabeçalhos devem corresponder aos apresentados no exemplo. A quant
 
 ## Banco de dados
 
-Ao executar a aplicação, o perfil padrão usa H2 persistente em arquivo no caminho `./data/conciliadordb`, relativo ao diretório de onde a aplicação foi iniciada. O usuário padrão é `sa`, sem senha. O Hibernate atualiza o schema existente (`ddl-auto=update`).
+Ao executar localmente, o perfil padrão (`local`) usa H2 persistente em `./data/conciliadordb`, relativo ao diretório de onde a aplicação foi iniciada. O usuário padrão é `sa`, sem senha, e o Hibernate atualiza o schema (`ddl-auto=update`). O console do H2 fica desabilitado por padrão; para habilitá-lo somente em desenvolvimento, execute com `--spring.h2.console.enabled=true`.
 
-O console do H2 está habilitado em `http://localhost:8080/h2-console`. Para conectar, use a URL JDBC `jdbc:h2:file:./data/conciliadordb`, usuário `sa` e senha vazia.
+As configurações locais podem ser sobrescritas pelas variáveis `CONCILIADOR_DB_URL`, `CONCILIADOR_DB_USERNAME` e `CONCILIADOR_DB_PASSWORD`. Para iniciar com o perfil `prod`, defina também essas três variáveis: nesse perfil, o console fica desabilitado e o Hibernate apenas valida o schema (`ddl-auto=validate`), sem atualizá-lo automaticamente. O projeto configura H2; MySQL/PostgreSQL e migrações de schema ainda não estão configurados.
+
+O diretório `data/` contém somente o banco local e não é versionado. Faça cópias de segurança desse arquivo antes de removê-lo ou substituí-lo.
 
 ## Testes
 
