@@ -21,7 +21,11 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.ByteArrayInputStream;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
+import java.util.Locale;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 @Controller
 public class ConciliadorController {
@@ -65,21 +69,27 @@ public class ConciliadorController {
                     // Processamento via XML estruturado oficial (já preenche no XmlService)
                     itensNotas.addAll(xmlService.lerXml(doc));
                 } else {
-                // Processamento via PDF ou Imagem com OCR/PDFBox
-                String textoExtraido = documentoParserService.extrairTexto(doc);
-
-                // Tenta extrair o número da nota do texto extraído usando Regex
-                String numeroNotaEncontrado = "-"; // Valor padrão caso não encontre
-                java.util.regex.Pattern pattern = java.util.regex.Pattern.compile(
-                        "(?i)(?:n[ºo°]|nf-?e|nota\\s*fiscal)[^0-9]*([0-9]+)",
-                        java.util.regex.Pattern.CASE_INSENSITIVE
-                );
-                java.util.regex.Matcher matcher = pattern.matcher(textoExtraido);
-                if (matcher.find()) {
-                    numeroNotaEncontrado = matcher.group(1);
-                }
-
+                    // Processamento via PDF ou Imagem com OCR/PDFBox
+                    String textoExtraido = documentoParserService.extrairTexto(doc);
+                    List<Double> quantidadesColuna = documentoParserService.extrairQuantidadesColuna(doc);
                     String[] linhas = textoExtraido.split("\n");
+                    long totalLinhasProduto = Arrays.stream(linhas)
+                            .map(String::trim)
+                            .filter(documentoParserService::contemValorMonetario)
+                            .count();
+                    boolean quantidadesColunaAlinhadas = quantidadesColuna.size() == totalLinhasProduto;
+                    int indiceLinhaProduto = 0;
+
+                    // Tenta extrair o número da nota do texto extraído usando Regex
+                    String numeroNotaEncontrado = "-";
+                    Pattern pattern = Pattern.compile(
+                            "(?i)(?:n[ºo°]|nf-?e|nota\\s*fiscal)[^0-9]*([0-9]+)"
+                    );
+                    Matcher matcher = pattern.matcher(textoExtraido);
+                    if (matcher.find()) {
+                        numeroNotaEncontrado = matcher.group(1);
+                    }
+
                     for (String linha : linhas) {
                         String linhaTrim = linha.trim();
                         if (linhaTrim.length() > 3) {
@@ -88,23 +98,13 @@ public class ConciliadorController {
                             itemOcr.setDescricaoProduto(linhaTrim);
 
                             double qtdExtraida = 1.0;
-                            String[] tokens = linhaTrim.split("\\s+");
-
-                            // 1. EXTRAÇÃO POSICIONAL PRECISA (Procura o número antes do valor monetário)
-                            for (int i = 0; i < tokens.length; i++) {
-                                String token = tokens[i].replace(",", ".");
-                                try {
-                                    if (token.matches("^\\d{1,3}$")) {
-                                        int val = Integer.parseInt(token);
-                                        if (val < 1000) {
-                                            // Se o token seguinte for um valor em dinheiro (ex: 7788.90), o token atual é a quantidade
-                                            if (i + 1 < tokens.length && tokens[i + 1].matches(".*[.,]\\d{2}.*")) {
-                                                qtdExtraida = val;
-                                                break;
-                                            }
-                                        }
-                                    }
-                                } catch (Exception ignored) {}
+                            if (documentoParserService.contemValorMonetario(linhaTrim)) {
+                                if (quantidadesColunaAlinhadas) {
+                                    qtdExtraida = quantidadesColuna.get(indiceLinhaProduto);
+                                } else {
+                                    qtdExtraida = documentoParserService.extrairQuantidadeDaLinha(linhaTrim).orElse(1.0);
+                                }
+                                indiceLinhaProduto++;
                             }
 
                             itemOcr.setQuantidade(qtdExtraida);
@@ -114,7 +114,7 @@ public class ConciliadorController {
                             itensNotas.add(itemOcr);
                         }
                     }
-            }
+                }
             }
 
             // 3. Executa o Motor Híbrido de Conciliação (Stemming + Levenshtein + JPA Dynamic Synonyms)

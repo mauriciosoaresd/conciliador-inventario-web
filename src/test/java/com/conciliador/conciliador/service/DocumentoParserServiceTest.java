@@ -4,6 +4,9 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockMultipartFile;
 
+import java.io.InputStream;
+import java.util.List;
+
 import static org.junit.jupiter.api.Assertions.*;
 
 class DocumentoParserServiceTest {
@@ -42,5 +45,25 @@ class DocumentoParserServiceTest {
         assertThrows(RuntimeException.class, () -> {
             documentoParserService.extrairTexto(arquivoInvalido);
         });
+    }
+
+    @Test
+    void deveExtrairQuantidadesDeColunaEmImagensDeNotas() throws Exception {
+        assertEquals(List.of(3.0, 6.0, 4.0), extrairQuantidades("ocr/nf_imagem_ruidosa_inclinada.png"));
+        assertEquals(List.of(5.0, 5.0, 2.0), extrairQuantidades("ocr/nf_imagem_baixa_resolucao.jpg"));
+    }
+
+    @Test
+    void deveExtrairQuantidadeMesmoComTracoEntreQuantidadeEValor() {
+        assertEquals(5.0, documentoParserService.extrairQuantidadeDaLinha(
+                "OUT-00009 Webcam Full HD Logitech C397 5 — 7788,90").orElseThrow());
+    }
+
+    private List<Double> extrairQuantidades(String nomeRecurso) throws Exception {
+        try (InputStream input = getClass().getClassLoader().getResourceAsStream(nomeRecurso)) {
+            assertNotNull(input);
+            MockMultipartFile arquivo = new MockMultipartFile("documentos", nomeRecurso, "image/png", input);
+            return documentoParserService.extrairQuantidadesColuna(arquivo);
+        }
     }
 }
