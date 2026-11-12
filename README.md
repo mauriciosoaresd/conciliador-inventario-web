@@ -59,4 +59,3 @@ Antes de iniciar, certifique-se de ter instalado em sua máquina:
   * **Linux (Ubuntu/Debian)**: `sudo apt-get install tesseract-ocr tesseract-ocr-por`
   * **macOS**: `brew install tesseract tesseract-lang`
   * **Windows**: Instalar o pacote Tesseract-OCR e registrar a variável de ambiente `TESSDATA_PREFIX`.
-
