@@ -12,7 +12,6 @@ import org.springframework.stereotype.Service;
 import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import java.util.stream.Collectors;
 
 @Service
 public class ConciliacaoService {
@@ -24,8 +23,7 @@ public class ConciliacaoService {
             List<ProdutoInventario> produtosInventario,
             List<ItemNotaFiscal> itensNotas) {
 
-        // 1. Agrupa o inventário por Código, somando a quantidade real contada (já que é inserido de 1 em 1)
-        // Mapeia o Código -> Objeto base do produto + Quantidade Total Contada + Estado
+        // 1. Agrupa o inventário por Código, somando a quantidade real contada
         Map<String, InventarioAgrupado> inventarioAgrupadoMap = new LinkedHashMap<>();
 
         for (ProdutoInventario prod : produtosInventario) {
@@ -74,7 +72,7 @@ public class ConciliacaoService {
                     double escoreLevenshtein = MatchUtils.calcularSimilaridadeLevenshtein(descInvNorm, descNotaNorm);
                     double escoreBase = (escoreJaccard * 0.7) + (escoreLevenshtein * 0.3);
 
-                    // Validação de penalização técnica (BTUs/números) e marcas conflitantes
+                    // Validação técnica (especificações numéricas/códigos) sem filtros frágeis de marca
                     double escoreFinal = calcularSimilaridadeComPenalizacao(
                             inv.getProdutoBase().getDescricao(),
                             item.getDescricaoProduto(),
@@ -104,9 +102,9 @@ public class ConciliacaoService {
                 }
             }
 
-            // 3. Avaliação Quantitativa Final (Inventário Agrupado vs Quantidade da NF)
+            // 3. Avaliação Quantitativa Final
             if (itemMatch != null) {
-                qtdNota = itemMatch.getQuantidade(); // Ex: 3 da Samsung
+                qtdNota = itemMatch.getQuantidade();
                 if (!status.startsWith("REVISÃO")) {
                     if (qtdInventario > qtdNota) {
                         status = "DIVERGENTE - SOBRA";
@@ -121,42 +119,65 @@ public class ConciliacaoService {
             resultados.add(new ResultadoConciliacao(
                     inv.getProdutoBase().getCodigo(),
                     inv.getProdutoBase().getDescricao(),
-                    itemMatch != null ? itemMatch.getDescricaoProduto() : null,
+                    itemMatch != null ? itemMatch.getDescricaoProduto() : "-",
                     inv.getProdutoBase().getEstado(),
-                    (int) qtdInventario, // Quantidade total contada (ex: 2)
-                    qtdNota,             // Quantidade da Nota Fiscal (ex: 3)
+                    (int) qtdInventario,
+                    qtdNota,
                     itemMatch != null ? itemMatch.getNumeroNota() : null,
                     itemMatch != null ? itemMatch.getNomeArquivoOrigem() : null,
                     status
             ));
         }
 
+        // 4. Adiciona ao relatório APENAS os itens reais da Nota Fiscal que NÃO foram consumidos,
+        // exibindo traços nas colunas do inventário físico ausente.
+        for (int i = 0; i < itensNotas.size(); i++) {
+            if (!indicesItensNotaConsumidos.contains(i)) {
+                ItemNotaFiscal itemNaoMapeado = itensNotas.get(i);
+                String descNota = itemNaoMapeado.getDescricaoProduto();
+
+                if (isDescricaoProdutoValida(descNota)) {
+                    resultados.add(new ResultadoConciliacao(
+                            "-",
+                            "-",
+                            descNota,
+                            "N/A",
+                            0,
+                            itemNaoMapeado.getQuantidade(),
+                            itemNaoMapeado.getNumeroNota(),
+                            itemNaoMapeado.getNomeArquivoOrigem(),
+                            "ITEM APENAS NA NF (NÃO ENCONTRADO NO FÍSICO)"
+                    ));
+                }
+            }
+        }
+
         return resultados;
     }
 
     /**
-     * Classe auxiliar interna para agrupar o inventário por item.
+     * Valida se o texto extraído é de facto um produto da NF e não lixo de cabeçalho/rodapé.
      */
-    private static class InventarioAgrupado {
-        private final ProdutoInventario produtoBase;
-        private int quantidadeTotal;
+    private boolean isDescricaoProdutoValida(String descricao) {
+        if (descricao == null || descricao.trim().length() < 5) return false;
+        String descUpper = descricao.toUpperCase().trim();
 
-        public InventarioAgrupado(ProdutoInventario produtoBase) {
-            this.produtoBase = produtoBase;
-            this.quantidadeTotal = 0;
+        if (descUpper.startsWith("COD") || descUpper.contains("DESCRICAO") || descUpper.contains("VL.UNIT")) {
+            return false;
         }
 
-        public void incrementarQuantidade() {
-            this.quantidadeTotal += 1;
-        }
+        String[] termosIgnorados = {
+                "EMITENTE", "DESTINATARIO", "CNPJ", "CPF", "TOTAL", "DANFE", "DOCUMENTO AUXILIAR",
+                "SERIE", "NF-E", "NOTA FISCAL", "CHAVE DE ACESSO", "PROTOCOLO", "INSCRICAO",
+                "VALOR", "ICMS", "PIS", "COFINS", "FRETE", "DESCONTO", "---------------", "—"
+        };
 
-        public ProdutoInventario getProdutoBase() {
-            return produtoBase;
+        for (String termo : termosIgnorados) {
+            if (descUpper.contains(termo)) {
+                return false;
+            }
         }
-
-        public int getQuantidadeTotal() {
-            return quantidadeTotal;
-        }
+        return true;
     }
 
     private double calcularSimilaridadeComPenalizacao(String descInventario, String descNotaFiscal, double escoreBase) {
@@ -165,15 +186,9 @@ public class ConciliacaoService {
         String inv = descInventario.toLowerCase();
         String nota = descNotaFiscal.toLowerCase();
 
-        // Blindagem de Marcas
-        String[] marcasConhecidas = {"daikin", "samsung", "lg", "intelbras", "cisco", "dell", "hp", "lenovo", "positivo", "tp-link", "d-link"};
-        for (String marca : marcasConhecidas) {
-            if (inv.contains(marca) != nota.contains(marca)) {
-                return 0.0; // Zera o match se as marcas baterem cruzadas (ex: Daikin vs Samsung)
-            }
-        }
-
-        // Blindagem de Especificações Numéricas (BTUs, potências, etc.)
+        // Blindagem de Especificações Numéricas (BTUs, modelos, capacidades, potências)
+        // Como o motor Jaccard + Levenshtein já pontua os nomes dos fabricantes pela similaridade textual,
+        // esta validação numérica impede que modelos com especificações/códigos diferentes se cruzem.
         Pattern patternNum = Pattern.compile("\\b(\\d{2,5})\\b");
         Matcher matcherInv = patternNum.matcher(inv);
         Matcher matcherNota = patternNum.matcher(nota);
@@ -222,5 +237,27 @@ public class ConciliacaoService {
                 sinonimoRepository.save(new SinonimoDinamico(origNorm, padNorm));
             }
         } catch (Exception ignored) {}
+    }
+
+    private static class InventarioAgrupado {
+        private final ProdutoInventario produtoBase;
+        private int quantidadeTotal;
+
+        public InventarioAgrupado(ProdutoInventario produtoBase) {
+            this.produtoBase = produtoBase;
+            this.quantidadeTotal = 0;
+        }
+
+        public void incrementarQuantidade() {
+            this.quantidadeTotal += 1;
+        }
+
+        public ProdutoInventario getProdutoBase() {
+            return produtoBase;
+        }
+
+        public int getQuantidadeTotal() {
+            return quantidadeTotal;
+        }
     }
 }
