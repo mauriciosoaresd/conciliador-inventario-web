@@ -9,6 +9,7 @@ public class ItemNotaFiscal {
     private String unidadeMedida;
     private double valorUnitario;
     private String nomeArquivoOrigem;
+    private String identificadorDocumentoOrigem;
 
     // Getters e Setters
     public String getCnpjEmitente() { return cnpjEmitente; }
@@ -34,6 +35,9 @@ public class ItemNotaFiscal {
 
     public String getNomeArquivoOrigem() { return nomeArquivoOrigem; }
     public void setNomeArquivoOrigem(String nomeArquivoOrigem) { this.nomeArquivoOrigem = nomeArquivoOrigem; }
+
+    public String getIdentificadorDocumentoOrigem() { return identificadorDocumentoOrigem; }
+    public void setIdentificadorDocumentoOrigem(String identificadorDocumentoOrigem) { this.identificadorDocumentoOrigem = identificadorDocumentoOrigem; }
 
     @Override
     public String toString() {

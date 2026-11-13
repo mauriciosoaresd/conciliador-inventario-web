@@ -8,6 +8,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
+import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -44,6 +45,7 @@ public class DocumentoFiscalService {
     }
 
     private List<ItemNotaFiscal> extrairItensPorOcr(MultipartFile documento, String nomeArquivo) {
+        String identificadorDocumento = UUID.randomUUID().toString();
         String textoExtraido = documentoParserService.extrairTexto(documento);
         List<Double> quantidadesColuna = documentoParserService.extrairQuantidadesColuna(documento);
         String[] linhas = textoExtraido.split("\n");
@@ -82,6 +84,7 @@ public class DocumentoFiscalService {
             item.setQuantidade(quantidade);
             item.setNomeArquivoOrigem(nomeArquivo);
             item.setNumeroNota(numeroNota);
+            item.setIdentificadorDocumentoOrigem(identificadorDocumento);
             itens.add(item);
         }
         return itens;

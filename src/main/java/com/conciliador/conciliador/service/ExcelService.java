@@ -61,10 +61,17 @@ public class ExcelService {
                 row.createCell(1).setCellValue(res.getDescricaoInventario() != null ? res.getDescricaoInventario() : "");
                 row.createCell(2).setCellValue(res.getDescricaoNotaFiscal() != null ? res.getDescricaoNotaFiscal() : "-");
                 row.createCell(3).setCellValue(res.getEstado() != null ? res.getEstado() : "");
-                row.createCell(4).setCellValue(res.getQuantidadeInventario());
+                Cell quantidadeInventarioCell = row.createCell(4);
+                if (res.getQuantidadeInventario() == null) {
+                    quantidadeInventarioCell.setCellValue("-");
+                } else {
+                    quantidadeInventarioCell.setCellValue(res.getQuantidadeInventario());
+                }
                 Cell quantidadeNotaCell = row.createCell(5);
                 if (res.getQuantidadeNotaFiscal() == null) {
-                    quantidadeNotaCell.setCellValue("NÃO IDENTIFICADA");
+                    quantidadeNotaCell.setCellValue(
+                            statusSemNotaFiscal(res.getStatus()) ? "-" : "NÃO IDENTIFICADA"
+                    );
                 } else {
                     quantidadeNotaCell.setCellValue(res.getQuantidadeNotaFiscal());
                 }
@@ -78,7 +85,7 @@ public class ExcelService {
                 String statusText = res.getStatus();
                 statusCell.setCellValue(statusText);
 
-                if (statusText.equals("OK")) {
+                if (statusText.startsWith("OK")) {
                     statusCell.setCellStyle(styleOk);
                 } else if (statusText.startsWith("REVISÃO")) {
                     statusCell.setCellStyle(styleRevisao);
@@ -111,5 +118,9 @@ public class ExcelService {
         style.setFont(font);
         style.setAlignment(HorizontalAlignment.CENTER);
         return style;
+    }
+
+    private boolean statusSemNotaFiscal(String status) {
+        return status != null && status.startsWith("SEM NF CORRESPONDENTE");
     }
 }

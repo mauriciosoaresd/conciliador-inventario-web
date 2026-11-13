@@ -1,15 +1,15 @@
 # Conciliador de Inventário
 
-Aplicação web em Java e Spring Boot para comparar um inventário em CSV com itens extraídos de documentos fiscais e gerar um relatório Excel. A aplicação usa correspondência por código e similaridade de descrições; resultados baseados em OCR podem exigir conferência manual, pois a leitura depende da qualidade e do layout do documento.
+Aplicação web em Java e Spring Boot para comparar um inventário em CSV com itens extraídos de documentos fiscais e gerar um relatório Excel. A descrição do produto é usada para encontrar correspondências; códigos são mantidos como informação, mas não determinam a identidade do produto. Resultados baseados em OCR podem exigir conferência manual, pois a leitura depende da qualidade e do layout do documento.
 
 ## Funcionalidades
 
-- Importação de inventário em CSV, com soma das quantidades de linhas que compartilham o mesmo código.
+- Importação de inventário em CSV, com soma das quantidades de linhas que compartilham a mesma descrição normalizada.
 - Leitura de notas fiscais em XML, incluindo tags comuns de NF-e (`cProd`, `xProd`, `qCom`) e estruturas simplificadas.
 - Extração de texto de PDFs e OCR de PDFs digitalizados e imagens PNG, JPG ou JPEG.
-- Correspondência primeiro por código e, quando necessário, por similaridade textual, com validações para números e dimensões.
-- Agrupamento das linhas repetidas da nota fiscal pelo código do produto ou, quando ele não existe, pela descrição normalizada; as quantidades identificadas são somadas.
-- Agrupamento do inventário por código; produtos sem código são agrupados pela descrição normalizada, evitando misturar descrições diferentes.
+- Correspondência por similaridade textual da descrição, com validações para números e dimensões; códigos de inventário e de fornecedor não são usados como critério de correspondência.
+- Agrupamento de linhas fiscais com a mesma descrição normalizada dentro de cada documento, sem combinar documentos diferentes.
+- Relatório com alocação das quantidades físicas entre as notas correspondentes, mantendo uma linha por alocação e identificando separadamente o saldo físico sem NF ou o excedente fiscal sem item físico.
 - Cadastro de sinônimos no H2 quando uma correspondência por descrição alcança o limite de confiança implementado.
 - Geração de relatório `.xlsx` com quantidades, rastreabilidade do documento de origem e status da conciliação.
 
@@ -60,9 +60,9 @@ INV-001,Notebook Dell Latitude,Dell,Latitude,Bom,,2
 INV-002,Cadeira de escritório,,,Regular,,1
 ```
 
-Os nomes dos cabeçalhos devem corresponder aos apresentados no exemplo. A quantidade pode ser fracionária. Linhas com o mesmo código são agrupadas e suas quantidades somadas. Quando o código estiver vazio, a descrição normalizada é usada para agrupar linhas equivalentes; descrições diferentes permanecem separadas.
+Os nomes dos cabeçalhos devem corresponder aos apresentados no exemplo. A quantidade pode ser fracionária. Linhas com descrições normalizadas equivalentes são agrupadas e suas quantidades somadas, mesmo que tenham códigos diferentes. Descrições diferentes permanecem separadas.
 
-Na conciliação, linhas fiscais repetidas com o mesmo código são agrupadas e suas quantidades somadas. Se o código fiscal estiver ausente ou for gerado pelo OCR, a descrição normalizada é usada para agrupar linhas equivalentes. A correspondência por descrição é aproximada e pode exigir revisão, especialmente para descrições curtas ou ambíguas.
+Na conciliação, itens com a mesma descrição são totalizados separadamente em cada documento fiscal e as quantidades são alocadas sem contar a mesma unidade física mais de uma vez. Por exemplo, um inventário de 10 unidades e duas notas com 4 unidades cada gera duas linhas `OK` de 4 unidades e uma linha de 2 unidades físicas com `-` na quantidade fiscal e status `SEM NF CORRESPONDENTE`. Se uma nota indicar mais unidades do que restam no inventário, a parte alocada aparece como `OK` e o excedente fiscal é listado separadamente como não alocado ao físico. As quantidades fiscais identificadas são alocadas na ordem dos documentos enviados; a alocação é por quantidade e não identifica individualmente cada peça física. Quantidades fiscais desconhecidas ou descrições com medidas conflitantes exigem revisão manual e não são tratadas como saldo sem NF. A correspondência por descrição é aproximada e pode exigir revisão, especialmente para descrições curtas ou ambíguas.
 
 ## Banco de dados
 
