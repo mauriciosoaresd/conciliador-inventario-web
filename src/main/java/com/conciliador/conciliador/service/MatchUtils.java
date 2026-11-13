@@ -3,6 +3,8 @@ package com.conciliador.conciliador.service;
 import org.apache.commons.text.similarity.LevenshteinDistance;
 
 import java.text.Normalizer;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.regex.Matcher;
@@ -56,6 +58,72 @@ public class MatchUtils {
         }
         return dimensoes;
     }
+
+    public static boolean dimensoesEquivalentes(String descricao1, String descricao2, double toleranciaCm) {
+        List<List<Dimensao>> dimensoes1 = extrairDimensoesEmCentimetros(descricao1);
+        List<List<Dimensao>> dimensoes2 = extrairDimensoesEmCentimetros(descricao2);
+        if (dimensoes1.isEmpty() || dimensoes1.size() != dimensoes2.size()) return false;
+
+        for (int i = 0; i < dimensoes1.size(); i++) {
+            if (!temDimensaoEquivalente(dimensoes1.get(i), dimensoes2.get(i), toleranciaCm)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static boolean temDimensaoEquivalente(
+            List<Dimensao> dimensoes1,
+            List<Dimensao> dimensoes2,
+            double toleranciaCm
+    ) {
+        for (Dimensao d1 : dimensoes1) {
+            for (Dimensao d2 : dimensoes2) {
+                boolean mesmaOrdem = Math.abs(d1.primeira() - d2.primeira()) <= toleranciaCm
+                        && Math.abs(d1.segunda() - d2.segunda()) <= toleranciaCm;
+                boolean ordemInvertida = Math.abs(d1.primeira() - d2.segunda()) <= toleranciaCm
+                        && Math.abs(d1.segunda() - d2.primeira()) <= toleranciaCm;
+                if (mesmaOrdem || ordemInvertida) return true;
+            }
+        }
+        return false;
+    }
+
+    private static List<List<Dimensao>> extrairDimensoesEmCentimetros(String texto) {
+        List<List<Dimensao>> dimensoes = new ArrayList<>();
+        if (texto == null) return dimensoes;
+
+        Pattern pattern = Pattern.compile(
+                "(\\d+(?:[.,]\\d+)?)\\s*[xX]\\s*(\\d+(?:[.,]\\d+)?)\\s*(mm|cm|m)?",
+                Pattern.CASE_INSENSITIVE
+        );
+        Matcher matcher = pattern.matcher(texto);
+        while (matcher.find()) {
+            double primeira = parseNumero(matcher.group(1));
+            double segunda = parseNumero(matcher.group(2));
+            String unidade = matcher.group(3);
+
+            if ("m".equalsIgnoreCase(unidade)) {
+                dimensoes.add(List.of(new Dimensao(primeira * 100, segunda * 100)));
+            } else if ("mm".equalsIgnoreCase(unidade)) {
+                dimensoes.add(List.of(new Dimensao(primeira / 10, segunda / 10)));
+            } else if ("cm".equalsIgnoreCase(unidade)) {
+                dimensoes.add(List.of(new Dimensao(primeira, segunda)));
+            } else {
+                dimensoes.add(List.of(
+                        new Dimensao(primeira, segunda),
+                        new Dimensao(primeira * 100, segunda * 100)
+                ));
+            }
+        }
+        return dimensoes;
+    }
+
+    private static double parseNumero(String numero) {
+        return Double.parseDouble(numero.replace(',', '.'));
+    }
+
+    private record Dimensao(double primeira, double segunda) {}
 
     /**
      * Jaccard Combinado com Stemming

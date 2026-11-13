@@ -152,6 +152,79 @@ class ConciliacaoServiceTest {
     }
 
     @Test
+    void deveConciliarMedidasEquivalentesComToleranciaDeCincoCentimetros() {
+        List<ResultadoConciliacao> resultados = conciliar(
+                produto("SKU-INV", "Gaveteiro Volante 3 Gavetas 40x50cm", 2.0),
+                item("SKU-NF", "Gaveteiro Volante 3 Gavetas 0,40x0,50m", 2.0)
+        );
+
+        assertEquals(1, resultados.size());
+        assertEquals("OK", resultados.get(0).getStatus());
+    }
+
+    @Test
+    void naoDeveConciliarCadeiraPresidenteComCadeiraFixa() {
+        List<ResultadoConciliacao> resultados = conciliar(
+                produto("SKU-INV", "Cadeira Presidente Giratoria Preta", 1.0),
+                item("SKU-NF", "Cadeira Fixa Empilhavel Preta", 1.0)
+        );
+
+        assertEquals(2, resultados.size());
+        assertEquals("SEM NF CORRESPONDENTE", resultados.get(0).getStatus());
+        assertEquals("ITEM APENAS NA NF (NÃO ENCONTRADO NO FÍSICO)", resultados.get(1).getStatus());
+    }
+
+    @Test
+    void naoDeveConciliarSwitchesComQuantidadeDePortasDiferente() {
+        List<ResultadoConciliacao> resultados = conciliar(
+                produto("SKU-INV", "Switch Cisco Catalyst 2960 24 portas", 2.0),
+                item("SKU-NF", "Switch Cisco Catalyst 2960 48 portas", 2.0)
+        );
+
+        assertEquals(2, resultados.size());
+        assertEquals("SEM NF CORRESPONDENTE", resultados.get(0).getStatus());
+        assertEquals("ITEM APENAS NA NF (NÃO ENCONTRADO NO FÍSICO)", resultados.get(1).getStatus());
+    }
+
+    @Test
+    void naoDeveConciliarRacksComUnidadesDiferentes() {
+        List<ResultadoConciliacao> resultados = conciliar(
+                produto("SKU-INV", "Rack de Parede 12U 570mm Preto", 2.0),
+                item("SKU-NF", "Rack de Parede 8U 570mm Preto", 2.0)
+        );
+
+        assertEquals(2, resultados.size());
+        assertEquals("SEM NF CORRESPONDENTE", resultados.get(0).getStatus());
+        assertEquals("ITEM APENAS NA NF (NÃO ENCONTRADO NO FÍSICO)", resultados.get(1).getStatus());
+    }
+
+    @Test
+    void deveConciliarMesmoModeloDeComputadorQuandoProcessadorERamDiferem() {
+        List<ResultadoConciliacao> resultados = conciliar(
+                produto("SKU-INV", "Notebook Dell Latitude 3420 i5 8GB SSD 256GB", 2.0),
+                item("SKU-NF", "Notebook Dell Latitude 3420 i7 16GB SSD 256GB", 2.0)
+        );
+
+        assertEquals(1, resultados.size());
+        assertEquals("OK", resultados.get(0).getStatus());
+    }
+
+    @Test
+    void deveExibirTodosOsEstadosQuandoAgrupaItensDoInventario() {
+        ProdutoInventario bom = produto("SKU-A", "Armario Baixo", 1.0);
+        bom.setEstado("Bom");
+        ProdutoInventario novo = produto("SKU-B", "Armario Baixo", 1.0);
+        novo.setEstado("Novo");
+
+        List<ResultadoConciliacao> resultados = conciliacaoService.conciliarInventarioComDocumentos(
+                List.of(bom, novo),
+                Collections.emptyList()
+        );
+
+        assertEquals("Bom, Novo", resultados.get(0).getEstado());
+    }
+
+    @Test
     void naoDeveConciliarProdutosComEspecificacoesNumericasDiferentes() {
         List<ResultadoConciliacao> resultados = conciliar(
                 produto("SKU-INV", "Notebook modelo 123 8GB", 1.0),

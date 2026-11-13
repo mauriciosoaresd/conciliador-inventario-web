@@ -8,8 +8,11 @@ Aplicação web em Java e Spring Boot para comparar um inventário em CSV com it
 - Leitura de notas fiscais em XML, incluindo tags comuns de NF-e (`cProd`, `xProd`, `qCom`) e estruturas simplificadas.
 - Extração de texto de PDFs e OCR de PDFs digitalizados e imagens PNG, JPG ou JPEG.
 - Correspondência por similaridade textual da descrição, com validações para números e dimensões; códigos de inventário e de fornecedor não são usados como critério de correspondência.
+- Comparação de dimensões convertendo metros e milímetros para centímetros, com tolerância de até 5 cm por medida.
+- Proteção contra divergências identificadoras, como tipo de cadeira, número de portas de switch, unidades de rack e modelo/marca de computadores. Diferenças de processador e memória RAM não impedem a correspondência quando marca e modelo coincidem.
 - Agrupamento de linhas fiscais com a mesma descrição normalizada dentro de cada documento, sem combinar documentos diferentes.
 - Relatório com alocação das quantidades físicas entre as notas correspondentes, mantendo uma linha por alocação e identificando separadamente o saldo físico sem NF ou o excedente fiscal sem item físico.
+- Quando a descrição agrupa unidades com estados diferentes, o relatório lista os estados encontrados em vez de mostrar somente o estado da primeira unidade.
 - Cadastro de sinônimos no H2 quando uma correspondência por descrição alcança o limite de confiança implementado.
 - Geração de relatório `.xlsx` com quantidades, rastreabilidade do documento de origem e status da conciliação.
 
@@ -62,7 +65,7 @@ INV-002,Cadeira de escritório,,,Regular,,1
 
 Os nomes dos cabeçalhos devem corresponder aos apresentados no exemplo. A quantidade pode ser fracionária. Linhas com descrições normalizadas equivalentes são agrupadas e suas quantidades somadas, mesmo que tenham códigos diferentes. Descrições diferentes permanecem separadas.
 
-Na conciliação, itens com a mesma descrição são totalizados separadamente em cada documento fiscal e as quantidades são alocadas sem contar a mesma unidade física mais de uma vez. Por exemplo, um inventário de 10 unidades e duas notas com 4 unidades cada gera duas linhas `OK` de 4 unidades e uma linha de 2 unidades físicas com `-` na quantidade fiscal e status `SEM NF CORRESPONDENTE`. Se uma nota indicar mais unidades do que restam no inventário, a parte alocada aparece como `OK` e o excedente fiscal é listado separadamente como não alocado ao físico. As quantidades fiscais identificadas são alocadas na ordem dos documentos enviados; a alocação é por quantidade e não identifica individualmente cada peça física. Quantidades fiscais desconhecidas ou descrições com medidas conflitantes exigem revisão manual e não são tratadas como saldo sem NF. A correspondência por descrição é aproximada e pode exigir revisão, especialmente para descrições curtas ou ambíguas.
+Na conciliação, itens com a mesma descrição são totalizados separadamente em cada documento fiscal e as quantidades são alocadas sem contar a mesma unidade física mais de uma vez. Por exemplo, um inventário de 10 unidades e duas notas com 4 unidades cada gera duas linhas `OK` de 4 unidades e uma linha de 2 unidades físicas com `-` na quantidade fiscal e status `SEM NF CORRESPONDENTE`. Se uma nota indicar mais unidades do que restam no inventário, a parte alocada aparece como `OK` e o excedente fiscal é listado separadamente como não alocado ao físico. As quantidades fiscais identificadas são alocadas na ordem dos documentos enviados; a alocação é por quantidade e não identifica individualmente cada peça física. As dimensões são comparadas em centímetros, aceitando até 5 cm de diferença por medida e interpretando as unidades indicadas no texto; quando a NF não explicita a unidade, a comparação considera as interpretações em centímetros e metros. Quantidades fiscais desconhecidas ou descrições com medidas conflitantes exigem revisão manual e não são tratadas como saldo sem NF. A correspondência por descrição é aproximada e pode exigir revisão, especialmente para descrições curtas ou ambíguas.
 
 ## Banco de dados
 

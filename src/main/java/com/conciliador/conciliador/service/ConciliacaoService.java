@@ -15,6 +15,14 @@ import java.util.regex.Pattern;
 @Service
 public class ConciliacaoService {
 
+    private static final double TOLERANCIA_DIMENSOES_CM = 5.0;
+    private static final Pattern QUANTIDADE_PORTAS = Pattern.compile("\\b(\\d+)\\s*portas?\\b");
+    private static final Pattern UNIDADES_RACK = Pattern.compile("\\b(\\d+)\\s*u\\b");
+    private static final Pattern ESPECIFICACAO_COMPUTADOR = Pattern.compile(
+            "\\b(?:i[3579]|ryzen\\s*\\d+|\\d+\\s*gb|ram|ddr\\d*|ssd|hdd)\\b.*$"
+    );
+    private static final Pattern NUMERO_MODELO = Pattern.compile("\\b\\d{2,}\\b");
+
     private final SinonimoDinamicoRepository sinonimoRepository;
 
     public ConciliacaoService(SinonimoDinamicoRepository sinonimoRepository) {
@@ -54,14 +62,30 @@ public class ConciliacaoService {
                 String descNotaNorm = aplicarSinonimosDinamicos(
                         MatchUtils.normalizar(item.getDescricaoProduto())
                 );
-                double escoreJaccard = MatchUtils.calcularSimilaridadeJaccardComStemming(descInvNorm, descNotaNorm);
-                double escoreLevenshtein = MatchUtils.calcularSimilaridadeLevenshtein(descInvNorm, descNotaNorm);
+                boolean computadores = ehComputador(descInvNorm) && ehComputador(descNotaNorm);
+                String textoInvComparacao = computadores
+                        ? removerEspecificacoesComputador(descInvNorm)
+                        : descInvNorm;
+                String textoNotaComparacao = computadores
+                        ? removerEspecificacoesComputador(descNotaNorm)
+                        : descNotaNorm;
+                double escoreJaccard = MatchUtils.calcularSimilaridadeJaccardComStemming(
+                        textoInvComparacao,
+                        textoNotaComparacao
+                );
+                double escoreLevenshtein = MatchUtils.calcularSimilaridadeLevenshtein(
+                        textoInvComparacao,
+                        textoNotaComparacao
+                );
                 double escoreBase = (escoreJaccard * 0.7) + (escoreLevenshtein * 0.3);
                 double escoreFinal = calcularSimilaridadeComPenalizacao(
-                        inv.getProdutoBase().getDescricao(),
-                        item.getDescricaoProduto(),
+                        textoInvComparacao,
+                        textoNotaComparacao,
                         escoreBase
                 );
+                if (atributosCriticosDivergem(descInvNorm, descNotaNorm)) {
+                    escoreFinal = 0;
+                }
                 String documento = item.getIdentificadorDocumentoOrigem();
                 if (documento == null || documento.isBlank()) {
                     documento = "ITEM:" + i;
@@ -78,7 +102,12 @@ public class ConciliacaoService {
                 ItemNotaFiscal item = itensNotaAgrupados.get(candidato.indice());
                 indicesItensNotaConsumidos.add(candidato.indice());
                 correspondencias.add(item);
-                if (candidato.escore() >= 0.85) {
+                if (candidato.escore() >= 0.85
+                        && !ehComputador(MatchUtils.normalizar(inv.getProdutoBase().getDescricao()))
+                        && !dimensoesDivergem(
+                                inv.getProdutoBase().getDescricao(),
+                                item.getDescricaoProduto()
+                        )) {
                     aprenderSinonimoSeNovo(inv.getProdutoBase().getDescricao(), item.getDescricaoProduto());
                 }
             }
@@ -121,18 +150,16 @@ public class ConciliacaoService {
             List<ResultadoConciliacao> resultados
     ) {
         double quantidadeFisicaRestante = inventario.getQuantidadeTotal();
-        Set<String> dimensoesInventario = MatchUtils.extrairDimensoes(
-                inventario.getProdutoBase().getDescricao()
-        );
+        String descricaoInventario = inventario.getProdutoBase().getDescricao();
         List<ItemNotaFiscal> correspondenciasOrdenadas = new ArrayList<>(correspondencias);
         correspondenciasOrdenadas.sort(Comparator.comparing(
                 item -> item.getQuantidade() == null
-                        || dimensoesDivergem(dimensoesInventario, item.getDescricaoProduto())
+                        || dimensoesDivergem(descricaoInventario, item.getDescricaoProduto())
         ));
 
         for (ItemNotaFiscal item : correspondenciasOrdenadas) {
             boolean dimensoesDivergentes = dimensoesDivergem(
-                    dimensoesInventario,
+                    descricaoInventario,
                     item.getDescricaoProduto()
             );
             if (item.getQuantidade() == null || dimensoesDivergentes) {
@@ -190,7 +217,7 @@ public class ConciliacaoService {
                     inventario.getCodigos(),
                     inventario.getProdutoBase().getDescricao(),
                     "-",
-                    inventario.getProdutoBase().getEstado(),
+                    inventario.getEstado(),
                     quantidadeFisicaRestante,
                     null,
                     null,
@@ -200,11 +227,106 @@ public class ConciliacaoService {
         }
     }
 
-    private boolean dimensoesDivergem(Set<String> dimensoesInventario, String descricaoNota) {
+    private boolean dimensoesDivergem(String descricaoInventario, String descricaoNota) {
         Set<String> dimensoesNota = MatchUtils.extrairDimensoes(descricaoNota);
-        return !dimensoesInventario.isEmpty()
+        return !MatchUtils.extrairDimensoes(descricaoInventario).isEmpty()
                 && !dimensoesNota.isEmpty()
-                && !dimensoesInventario.equals(dimensoesNota);
+                && !MatchUtils.dimensoesEquivalentes(
+                        descricaoInventario,
+                        descricaoNota,
+                        TOLERANCIA_DIMENSOES_CM
+                );
+    }
+
+    private boolean atributosCriticosDivergem(String descricaoInventario, String descricaoNota) {
+        if (valoresRotuladosDivergem(descricaoInventario, descricaoNota, QUANTIDADE_PORTAS)
+                || valoresRotuladosDivergem(descricaoInventario, descricaoNota, UNIDADES_RACK)) {
+            return true;
+        }
+
+        if (descricaoInventario.contains("cadeira") && descricaoNota.contains("cadeira")) {
+            Set<String> tiposInventario = tiposCadeira(descricaoInventario);
+            Set<String> tiposNota = tiposCadeira(descricaoNota);
+            if (!tiposInventario.isEmpty() && !tiposNota.isEmpty()
+                    && Collections.disjoint(tiposInventario, tiposNota)) {
+                return true;
+            }
+        }
+
+        boolean inventarioComputador = ehComputador(descricaoInventario);
+        boolean notaComputador = ehComputador(descricaoNota);
+        if (inventarioComputador != notaComputador) return true;
+        return inventarioComputador
+                && !modelosComputadorCompativeis(descricaoInventario, descricaoNota);
+    }
+
+    private boolean valoresRotuladosDivergem(String descricao1, String descricao2, Pattern padrao) {
+        String valor1 = capturarValor(descricao1, padrao);
+        String valor2 = capturarValor(descricao2, padrao);
+        return valor1 != null && valor2 != null && !valor1.equals(valor2);
+    }
+
+    private String capturarValor(String descricao, Pattern padrao) {
+        Matcher matcher = padrao.matcher(descricao);
+        return matcher.find() ? matcher.group(1) : null;
+    }
+
+    private Set<String> tiposCadeira(String descricao) {
+        Set<String> tipos = new LinkedHashSet<>();
+        for (String tipo : List.of("presidente", "fixa", "giratoria", "empilhavel")) {
+            if (descricao.contains(tipo)) tipos.add(tipo);
+        }
+        return tipos;
+    }
+
+    private boolean ehComputador(String descricao) {
+        return descricao.matches(".*\\b(desktop|notebook|laptop|computador|pc)\\b.*");
+    }
+
+    private String removerEspecificacoesComputador(String descricao) {
+        return descricao
+                .replaceAll("\\b(?:i[3579]|ryzen\\s*\\d+)\\s+\\d+\\s*gb\\b", " ")
+                .replaceAll("\\b(?:i[3579]|ryzen\\s*\\d+)\\b", " ")
+                .replaceAll("\\b\\d+\\s*gb\\s*(?:ram|ddr\\d*)\\b", " ")
+                .replaceAll("\\b(?:ram|ddr\\d*)\\s*\\d+\\s*gb\\b", " ")
+                .replaceAll("\\s+", " ")
+                .trim();
+    }
+
+    private boolean modelosComputadorCompativeis(String descricao1, String descricao2) {
+        String identificador1 = extrairIdentificadorComputador(descricao1);
+        String identificador2 = extrairIdentificadorComputador(descricao2);
+        if (identificador1.isBlank() || identificador2.isBlank()) return false;
+
+        String[] tokens1 = identificador1.split("\\s+");
+        String[] tokens2 = identificador2.split("\\s+");
+        if (!tokens1[0].equals(tokens2[0])) return false;
+
+        Set<String> numeros1 = extrairNumerosModelo(identificador1);
+        Set<String> numeros2 = extrairNumerosModelo(identificador2);
+        if (!numeros1.isEmpty() && !numeros2.isEmpty() && Collections.disjoint(numeros1, numeros2)) {
+            return false;
+        }
+
+        String modelo1 = identificador1.substring(tokens1[0].length()).trim();
+        String modelo2 = identificador2.substring(tokens2[0].length()).trim();
+        if (modelo1.isBlank() || modelo2.isBlank()) return false;
+        return MatchUtils.calcularSimilaridadeJaccardComStemming(modelo1, modelo2) >= 0.5
+                || MatchUtils.calcularSimilaridadeLevenshtein(modelo1, modelo2) >= 0.75;
+    }
+
+    private String extrairIdentificadorComputador(String descricao) {
+        String semEspecificacoes = ESPECIFICACAO_COMPUTADOR.matcher(descricao).replaceFirst("").trim();
+        return semEspecificacoes
+                .replaceFirst("^(?:desktop|notebook|laptop|computador|pc)\\s+", "")
+                .trim();
+    }
+
+    private Set<String> extrairNumerosModelo(String identificador) {
+        Set<String> numeros = new HashSet<>();
+        Matcher matcher = NUMERO_MODELO.matcher(identificador);
+        while (matcher.find()) numeros.add(matcher.group());
+        return numeros;
     }
 
     private double subtrairQuantidade(double quantidade, double quantidadeAlocada) {
@@ -223,7 +345,7 @@ public class ConciliacaoService {
                 inventario.getCodigos(),
                 inventario.getProdutoBase().getDescricao(),
                 item.getDescricaoProduto(),
-                inventario.getProdutoBase().getEstado(),
+                inventario.getEstado(),
                 quantidadeInventario,
                 quantidadeNotaFiscal,
                 item.getNumeroNota(),
@@ -387,20 +509,27 @@ public class ConciliacaoService {
         private final ProdutoInventario produtoBase;
         private double quantidadeTotal;
         private final Set<String> codigos = new LinkedHashSet<>();
+        private final Set<String> estados = new LinkedHashSet<>();
 
         public InventarioAgrupado(ProdutoInventario produtoBase) {
             this.produtoBase = produtoBase;
             this.quantidadeTotal = 0;
             adicionarCodigo(produtoBase.getCodigo());
+            adicionarEstado(produtoBase.getEstado());
         }
 
         public void adicionar(ProdutoInventario produto) {
             quantidadeTotal += produto.getQuantidade();
             adicionarCodigo(produto.getCodigo());
+            adicionarEstado(produto.getEstado());
         }
 
         private void adicionarCodigo(String codigo) {
             if (codigo != null && !codigo.isBlank()) codigos.add(codigo.trim());
+        }
+
+        private void adicionarEstado(String estado) {
+            if (estado != null && !estado.isBlank()) estados.add(estado.trim());
         }
 
         public ProdutoInventario getProdutoBase() {
@@ -413,6 +542,10 @@ public class ConciliacaoService {
 
         public String getCodigos() {
             return String.join(", ", codigos);
+        }
+
+        public String getEstado() {
+            return String.join(", ", estados);
         }
     }
 
