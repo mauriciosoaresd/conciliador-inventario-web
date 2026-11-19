@@ -8,6 +8,7 @@ import org.springframework.stereotype.Service;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.math.BigDecimal;
 import java.util.List;
 
 @Service
@@ -32,7 +33,7 @@ public class ExcelService {
             CellStyle styleDivergente = criarEstiloStatus(workbook, IndexedColors.ROSE);
             CellStyle styleNaoEncontrado = criarEstiloStatus(workbook, IndexedColors.GREY_40_PERCENT);
 
-            // Linha de Cabeçalho atualizada com as 2 novas colunas de rastreabilidade
+            // Colunas fiscais e de rastreabilidade
             String[] colunas = {
                     "Código",
                     "Descrição Inventário",
@@ -40,6 +41,7 @@ public class ExcelService {
                     "Estado",
                     "Qtd Inventário",
                     "Qtd Nota Fiscal",
+                    "Diferença (Físico - NF)",
                     "Nº da Nota Fiscal",
                     "Nome do Arquivo",
                     "Status"
@@ -76,20 +78,29 @@ public class ExcelService {
                     quantidadeNotaCell.setCellValue(res.getQuantidadeNotaFiscal());
                 }
 
-                // Preenchendo os novos campos de rastreabilidade
-                row.createCell(6).setCellValue(res.getNumeroNotaFiscal() != null ? res.getNumeroNotaFiscal() : "-");
-                row.createCell(7).setCellValue(res.getNomeArquivoNota() != null ? res.getNomeArquivoNota() : "-");
+                Cell diferencaCell = row.createCell(6);
+                if (res.getQuantidadeInventario() == null || res.getQuantidadeNotaFiscal() == null) {
+                    diferencaCell.setCellValue("-");
+                } else {
+                    diferencaCell.setCellValue(BigDecimal.valueOf(res.getQuantidadeInventario())
+                            .subtract(BigDecimal.valueOf(res.getQuantidadeNotaFiscal()))
+                            .doubleValue());
+                }
 
-                // Célula de Status com formatação condicional baseada no texto (agora na coluna index 8)
-                Cell statusCell = row.createCell(8);
+                row.createCell(7).setCellValue(res.getNumeroNotaFiscal() != null ? res.getNumeroNotaFiscal() : "-");
+                row.createCell(8).setCellValue(res.getNomeArquivoNota() != null ? res.getNomeArquivoNota() : "-");
+
+                Cell statusCell = row.createCell(9);
                 String statusText = res.getStatus();
                 statusCell.setCellValue(statusText);
 
                 if (statusText.startsWith("OK")) {
                     statusCell.setCellStyle(styleOk);
-                } else if (statusText.startsWith("REVISÃO")) {
+                } else if (statusText.startsWith("REVISÃO")
+                        || statusText.startsWith("CONCILIADO MANUALMENTE")) {
                     statusCell.setCellStyle(styleRevisao);
-                } else if (statusText.contains("DIVERGENTE")) {
+                } else if (statusText.contains("DIVERGENTE")
+                        || statusText.startsWith("FALTANDO NO FÍSICO")) {
                     statusCell.setCellStyle(styleDivergente);
                 } else {
                     statusCell.setCellStyle(styleNaoEncontrado);

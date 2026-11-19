@@ -2,8 +2,10 @@ package com.conciliador.conciliador.service;
 
 import org.apache.commons.text.similarity.LevenshteinDistance;
 
+import java.math.BigDecimal;
 import java.text.Normalizer;
 import java.util.HashSet;
+import java.util.Locale;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -11,17 +13,67 @@ import java.util.regex.Pattern;
 public class MatchUtils {
 
     private static final LevenshteinDistance LEVENSHTEIN = new LevenshteinDistance();
+    private static final Pattern DIMENSAO_COM_UNIDADE = Pattern.compile(
+            "(\\d+(?:[.,]\\d+)?)\\s*[xX]\\s*(\\d+(?:[.,]\\d+)?)\\s*(mm|cm|m)\\b",
+            Pattern.CASE_INSENSITIVE
+    );
+    private static final Pattern MEDIDA_COM_UNIDADE = Pattern.compile(
+            "(\\d+(?:[.,]\\d+)?)\\s*(mm|cm|m)\\b",
+            Pattern.CASE_INSENSITIVE
+    );
 
     public static String normalizar(String texto) {
         if (texto == null) return "";
 
-        String nfd = Normalizer.normalize(texto, Normalizer.Form.NFD);
+        String nfd = Normalizer.normalize(normalizarMedidas(texto), Normalizer.Form.NFD);
         String semAcentos = nfd.replaceAll("\\p{InCombiningDiacriticalMarks}+", "");
 
         return semAcentos.toLowerCase()
                 .replaceAll("[^a-z0-9x.]", " ")
                 .replaceAll("\\s+", " ")
                 .trim();
+    }
+
+    private static String normalizarMedidas(String texto) {
+        Matcher dimensoes = DIMENSAO_COM_UNIDADE.matcher(texto);
+        StringBuffer resultado = new StringBuffer();
+        while (dimensoes.find()) {
+            double fator = fatorParaCentimetros(dimensoes.group(3));
+            String primeira = converterParaCentimetros(dimensoes.group(1), fator);
+            String segunda = converterParaCentimetros(dimensoes.group(2), fator);
+            dimensoes.appendReplacement(
+                    resultado,
+                    Matcher.quoteReplacement(primeira + "x" + segunda + "cm")
+            );
+        }
+        dimensoes.appendTail(resultado);
+
+        Matcher medidas = MEDIDA_COM_UNIDADE.matcher(resultado.toString());
+        resultado = new StringBuffer();
+        while (medidas.find()) {
+            String centimetros = converterParaCentimetros(
+                    medidas.group(1),
+                    fatorParaCentimetros(medidas.group(2))
+            );
+            medidas.appendReplacement(resultado, Matcher.quoteReplacement(centimetros + "cm"));
+        }
+        medidas.appendTail(resultado);
+        return resultado.toString();
+    }
+
+    private static double fatorParaCentimetros(String unidade) {
+        return switch (unidade.toLowerCase(Locale.ROOT)) {
+            case "m" -> 100;
+            case "mm" -> 0.1;
+            default -> 1;
+        };
+    }
+
+    private static String converterParaCentimetros(String medida, double fator) {
+        return new BigDecimal(medida.replace(',', '.'))
+                .multiply(BigDecimal.valueOf(fator))
+                .stripTrailingZeros()
+                .toPlainString();
     }
 
     /**
@@ -52,9 +104,19 @@ public class MatchUtils {
         Matcher matcher = pattern.matcher(texto);
 
         while (matcher.find()) {
-            dimensoes.add(matcher.group().replaceAll("\\s+", "").toLowerCase());
+            String primeira = normalizarMedida(matcher.group(1));
+            String segunda = normalizarMedida(matcher.group(2));
+            if (primeira.compareTo(segunda) < 0) {
+                dimensoes.add(primeira + "x" + segunda);
+            } else {
+                dimensoes.add(segunda + "x" + primeira);
+            }
         }
         return dimensoes;
+    }
+
+    private static String normalizarMedida(String medida) {
+        return new BigDecimal(medida.replace(',', '.')).stripTrailingZeros().toPlainString();
     }
 
     /**

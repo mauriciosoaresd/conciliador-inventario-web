@@ -15,6 +15,18 @@ class MatchUtilsTest {
     }
 
     @Test
+    void deveNormalizarMedidasMetricasEquivalentesParaCentimetros() {
+        assertEquals(
+                MatchUtils.normalizar("Rack 57cm"),
+                MatchUtils.normalizar("Rack 570MM")
+        );
+        assertEquals(
+                MatchUtils.normalizar("Mesa 120x60cm"),
+                MatchUtils.normalizar("Mesa 1200x600mm")
+        );
+    }
+
+    @Test
     void deveAplicarStemmingCorretamente() {
         assertEquals("computador", MatchUtils.aplicarStemming("computadores"));
         assertEquals("cadeira", MatchUtils.aplicarStemming("cadeiras"));

@@ -9,6 +9,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.mock.web.MockMultipartFile;
 
 import java.nio.charset.StandardCharsets;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.OptionalDouble;
 
@@ -30,20 +31,23 @@ class DocumentoFiscalServiceTest {
     @Test
     void deveExtrairItensOcrComQuantidadeEIdentificacaoDaNota() {
         MockMultipartFile documento = documento("nota.png");
-        when(documentoParserService.extrairTexto(documento))
-                .thenReturn("Nota Fiscal 12345\nCadeira executiva 2 100,00");
+        when(documentoParserService.extrairTexto(documento)).thenReturn(
+                "Nota Fiscal 12345\nData de Emissão: 15/06/2024\nCadeira executiva 2 100,00"
+        );
         when(documentoParserService.extrairQuantidadesColuna(documento)).thenReturn(List.of());
         when(documentoParserService.contemValorMonetario("Nota Fiscal 12345")).thenReturn(false);
+        when(documentoParserService.contemValorMonetario("Data de Emissão: 15/06/2024")).thenReturn(false);
         when(documentoParserService.contemValorMonetario("Cadeira executiva 2 100,00")).thenReturn(true);
         when(documentoParserService.extrairQuantidadeDaLinha("Cadeira executiva 2 100,00"))
                 .thenReturn(OptionalDouble.of(2.0));
 
         List<ItemNotaFiscal> itens = documentoFiscalService.extrairItens(List.of(documento));
 
-        assertEquals(2, itens.size());
+        assertEquals(3, itens.size());
         assertEquals("12345", itens.get(0).getNumeroNota());
-        assertEquals(2.0, itens.get(1).getQuantidade());
-        assertEquals("nota.png", itens.get(1).getNomeArquivoOrigem());
+        assertEquals(2.0, itens.get(2).getQuantidade());
+        assertEquals("nota.png", itens.get(2).getNomeArquivoOrigem());
+        assertEquals(LocalDate.of(2024, 6, 15), itens.get(2).getDataEmissao());
     }
 
     private MockMultipartFile documento(String nome) {

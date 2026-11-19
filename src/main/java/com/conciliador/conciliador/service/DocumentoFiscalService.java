@@ -4,6 +4,10 @@ import com.conciliador.conciliador.model.ItemNotaFiscal;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
+import java.time.format.ResolverStyle;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -18,6 +22,13 @@ public class DocumentoFiscalService {
     private static final Pattern NUMERO_NOTA = Pattern.compile(
             "(?i)(?:n[ºo°]|nf-?e|nota\\s*fiscal)[^0-9]*([0-9]+)"
     );
+    private static final Pattern DATA_EMISSAO = Pattern.compile(
+            "(?i)(?:data\\s*(?:de\\s*)?emiss[aã]o|emiss[aã]o)\\s*[:\\-]?\\s*"
+                    + "(\\d{2}[./-]\\d{2}[./-]\\d{4}|\\d{4}-\\d{2}-\\d{2})"
+    );
+    private static final DateTimeFormatter FORMATO_DATA_BR = DateTimeFormatter
+            .ofPattern("dd/MM/uuuu")
+            .withResolverStyle(ResolverStyle.STRICT);
 
     private final DocumentoParserService documentoParserService;
     private final XmlService xmlService;
@@ -56,6 +67,7 @@ public class DocumentoFiscalService {
         boolean quantidadesColunaAlinhadas = quantidadesColuna.size() == totalLinhasProduto;
         int indiceLinhaProduto = 0;
         String numeroNota = extrairNumeroNota(textoExtraido);
+        LocalDate dataEmissao = extrairDataEmissao(textoExtraido);
 
         List<ItemNotaFiscal> itens = new ArrayList<>();
         for (String linha : linhas) {
@@ -84,6 +96,7 @@ public class DocumentoFiscalService {
             item.setQuantidade(quantidade);
             item.setNomeArquivoOrigem(nomeArquivo);
             item.setNumeroNota(numeroNota);
+            item.setDataEmissao(dataEmissao);
             item.setIdentificadorDocumentoOrigem(identificadorDocumento);
             itens.add(item);
         }
@@ -93,5 +106,25 @@ public class DocumentoFiscalService {
     private String extrairNumeroNota(String texto) {
         Matcher matcher = NUMERO_NOTA.matcher(texto);
         return matcher.find() ? matcher.group(1) : "-";
+    }
+
+    private LocalDate extrairDataEmissao(String texto) {
+        Matcher matcher = DATA_EMISSAO.matcher(texto);
+        if (!matcher.find()) return null;
+
+        String valor = matcher.group(1);
+        if (valor.matches("\\d{4}-\\d{2}-\\d{2}")) {
+            return parseData(valor, DateTimeFormatter.ISO_LOCAL_DATE);
+        }
+        String dataNormalizada = valor.replace('.', '/').replace('-', '/');
+        return parseData(dataNormalizada, FORMATO_DATA_BR);
+    }
+
+    private LocalDate parseData(String valor, DateTimeFormatter formato) {
+        try {
+            return LocalDate.parse(valor, formato);
+        } catch (DateTimeParseException ignored) {
+            return null;
+        }
     }
 }

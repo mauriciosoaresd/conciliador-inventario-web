@@ -14,26 +14,27 @@ class ExcelServiceTest {
     private final ExcelService excelService = new ExcelService();
 
     @Test
-    void deveExibirQuantidadeNaoIdentificadaNoRelatorio() throws Exception {
+    void deveExibirItemFiscalComQuantidadeNaoIdentificada() throws Exception {
         ResultadoConciliacao resultado = new ResultadoConciliacao(
-                "SKU-1",
+                "-",
                 "Cadeira executiva",
                 "Cadeira executiva",
-                "Bom",
-                5.0,
+                "N/A",
+                null,
                 null,
                 "123",
                 "nota.pdf",
-                "REVISÃO MANUAL - QUANTIDADE NÃO IDENTIFICADA"
+                "ITEM APENAS NA NF (NÃO ENCONTRADO NO FÍSICO)"
         );
 
         try (XSSFWorkbook workbook = new XSSFWorkbook(
                 new ByteArrayInputStream(excelService.gerarRelatorioExcel(List.of(resultado)).readAllBytes())
         )) {
             var row = workbook.getSheetAt(0).getRow(1);
-            assertEquals(5.0, row.getCell(4).getNumericCellValue());
+            assertEquals("-", row.getCell(4).getStringCellValue());
             assertEquals("NÃO IDENTIFICADA", row.getCell(5).getStringCellValue());
-            assertEquals("REVISÃO MANUAL - QUANTIDADE NÃO IDENTIFICADA", row.getCell(8).getStringCellValue());
+            assertEquals("-", row.getCell(6).getStringCellValue());
+            assertEquals("ITEM APENAS NA NF (NÃO ENCONTRADO NO FÍSICO)", row.getCell(9).getStringCellValue());
         }
     }
 
@@ -78,6 +79,38 @@ class ExcelServiceTest {
             var row = workbook.getSheetAt(0).getRow(1);
             assertEquals(2.0, row.getCell(4).getNumericCellValue());
             assertEquals("-", row.getCell(5).getStringCellValue());
+            assertEquals("-", row.getCell(6).getStringCellValue());
+        }
+    }
+
+    @Test
+    void deveExibirDiferencaEntreQuantidadeFisicaEFiscal() throws Exception {
+        ResultadoConciliacao faltante = new ResultadoConciliacao(
+                "SKU-1",
+                "Cadeira executiva",
+                "Cadeira executiva",
+                "Bom",
+                3.0,
+                5.0,
+                "123",
+                "nota.xml",
+                "FALTANDO NO FÍSICO"
+        );
+
+        try (XSSFWorkbook workbook = new XSSFWorkbook(
+                new ByteArrayInputStream(excelService.gerarRelatorioExcel(List.of(faltante)).readAllBytes())
+        )) {
+            var sheet = workbook.getSheetAt(0);
+            var header = sheet.getRow(0);
+            var row = sheet.getRow(1);
+
+            assertEquals("Diferença (Físico - NF)", header.getCell(6).getStringCellValue());
+            assertEquals(3.0, row.getCell(4).getNumericCellValue());
+            assertEquals(5.0, row.getCell(5).getNumericCellValue());
+            assertEquals(-2.0, row.getCell(6).getNumericCellValue());
+            assertEquals("123", row.getCell(7).getStringCellValue());
+            assertEquals("nota.xml", row.getCell(8).getStringCellValue());
+            assertEquals("FALTANDO NO FÍSICO", row.getCell(9).getStringCellValue());
         }
     }
 }
