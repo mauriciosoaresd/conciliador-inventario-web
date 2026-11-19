@@ -16,6 +16,10 @@ import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
 import java.io.IOException;
 import java.io.InputStream;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
+import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -64,6 +68,20 @@ public class XmlService {
             if (numeroNota.isEmpty()) {
                 numeroNota = pegarValorTag(doc.getDocumentElement(), new String[]{"nNF", "numeroNota", "numero"});
             }
+            String dataEmissaoTexto = "";
+            if (ideList.getLength() > 0) {
+                dataEmissaoTexto = pegarValorTag(
+                        (Element) ideList.item(0),
+                        new String[]{"dhEmi", "dEmi", "dataEmissao"}
+                );
+            }
+            if (dataEmissaoTexto.isEmpty()) {
+                dataEmissaoTexto = pegarValorTag(
+                        doc.getDocumentElement(),
+                        new String[]{"dhEmi", "dEmi", "dataEmissao"}
+                );
+            }
+            LocalDate dataEmissao = parseDataEmissao(dataEmissaoTexto);
 
             // 2. Busca os itens da nota
             NodeList nList = buscarElementos(doc.getDocumentElement(), "det");
@@ -89,6 +107,7 @@ public class XmlService {
 
                 // Atribui corretamente os dados de rastreabilidade
                 item.setNumeroNota(numeroNota);
+                item.setDataEmissao(dataEmissao);
                 item.setNomeArquivoOrigem(nomeArquivo);
                 item.setIdentificadorDocumentoOrigem(identificadorDocumento);
 
@@ -128,6 +147,24 @@ public class XmlService {
             return Double.isFinite(valor) ? valor : null;
         } catch (NumberFormatException e) {
             return null;
+        }
+    }
+
+    private LocalDate parseDataEmissao(String valor) {
+        if (valor == null || valor.isBlank()) return null;
+        String data = valor.trim();
+        try {
+            return OffsetDateTime.parse(data).toLocalDate();
+        } catch (DateTimeParseException ignored) {
+            try {
+                return LocalDateTime.parse(data).toLocalDate();
+            } catch (DateTimeParseException ignoredLocalDateTime) {
+                try {
+                    return LocalDate.parse(data);
+                } catch (DateTimeParseException ignoredLocalDate) {
+                    return null;
+                }
+            }
         }
     }
 }

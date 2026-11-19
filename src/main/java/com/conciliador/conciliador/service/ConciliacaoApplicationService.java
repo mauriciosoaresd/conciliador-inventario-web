@@ -42,6 +42,36 @@ public class ConciliacaoApplicationService {
         return excelService.gerarRelatorioExcel(resultados);
     }
 
+    public ConciliacaoRevisao prepararRevisao(
+            MultipartFile arquivoCsv,
+            List<MultipartFile> arquivosDocumentos
+    ) {
+        validarArquivos(arquivoCsv, arquivosDocumentos);
+        List<ProdutoInventario> produtosInventario = csvService.lerCsv(arquivoCsv);
+        List<ItemNotaFiscal> itensNotas = documentoFiscalService.extrairItens(arquivosDocumentos);
+        ConciliacaoService.AnaliseConciliacao analise = conciliacaoService.analisarConciliacao(
+                produtosInventario,
+                itensNotas
+        );
+        return new ConciliacaoRevisao(
+                List.copyOf(produtosInventario),
+                List.copyOf(itensNotas),
+                analise
+        );
+    }
+
+    public ByteArrayInputStream gerarRelatorio(
+            ConciliacaoRevisao revisao,
+            List<ConciliacaoService.AssociacaoManual> associacoesManuais
+    ) {
+        ConciliacaoService.AnaliseConciliacao analise = conciliacaoService.analisarConciliacao(
+                revisao.produtosInventario(),
+                revisao.itensNotas(),
+                associacoesManuais
+        );
+        return excelService.gerarRelatorioExcel(analise.resultados());
+    }
+
     private void validarArquivos(MultipartFile arquivoCsv, List<MultipartFile> arquivosDocumentos) {
         if (arquivoCsv == null || arquivoCsv.isEmpty()) {
             throw new RequisicaoInvalidaException("Envie um arquivo CSV de inventário não vazio.");
@@ -78,4 +108,10 @@ public class ConciliacaoApplicationService {
         }
         return false;
     }
+
+    public record ConciliacaoRevisao(
+            List<ProdutoInventario> produtosInventario,
+            List<ItemNotaFiscal> itensNotas,
+            ConciliacaoService.AnaliseConciliacao analise
+    ) {}
 }

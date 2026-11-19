@@ -6,6 +6,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockMultipartFile;
 
 import java.nio.charset.StandardCharsets;
+import java.time.LocalDate;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -53,6 +54,26 @@ class XmlServiceTest {
 
         assertEquals("SKU-1", item.getCodigoProdutoFornecedor());
         assertEquals(2.0, item.getQuantidade());
+    }
+
+    @Test
+    void deveLerDataDeEmissaoComFusoHorario() {
+        ItemNotaFiscal item = lerItem(
+                "<nfe><ide><dhEmi>2024-06-15T10:30:00-03:00</dhEmi></ide>"
+                        + "<det><prod><xProd>Cadeira executiva</xProd><qCom>1</qCom></prod></det></nfe>"
+        );
+
+        assertEquals(LocalDate.of(2024, 6, 15), item.getDataEmissao());
+    }
+
+    @Test
+    void deveLerDataDeEmissaoNoFormatoDataSemHorario() {
+        ItemNotaFiscal item = lerItem(
+                "<nfe><ide><dEmi>2023-02-07</dEmi></ide>"
+                        + "<det><prod><xProd>Cadeira executiva</xProd><qCom>1</qCom></prod></det></nfe>"
+        );
+
+        assertEquals(LocalDate.of(2023, 2, 7), item.getDataEmissao());
     }
 
     @Test

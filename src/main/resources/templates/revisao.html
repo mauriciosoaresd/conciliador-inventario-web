@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Revisar conciliação | Inventário</title>
+    <style>
+        :root {
+            color-scheme: light;
+            --page: #f4f7fb;
+            --surface: #fff;
+            --text: #17243b;
+            --muted: #64748b;
+            --line: #e2e8f0;
+            --blue: #2457d6;
+            --blue-dark: #1946b5;
+            --blue-soft: #eff6ff;
+            --amber: #a64b08;
+            --amber-soft: #fff8eb;
+            --green: #18794e;
+            --green-soft: #ecfdf3;
+            --shadow: 0 8px 24px rgba(27, 44, 75, .06);
+        }
+
+        * { box-sizing: border-box; }
+
+        body {
+            margin: 0;
+            padding: 36px 20px 56px;
+            background: var(--page);
+            color: var(--text);
+            font-family: Inter, "Segoe UI", Arial, sans-serif;
+            line-height: 1.5;
+        }
+
+        main { max-width: 1000px; margin: 0 auto; }
+
+        .hero { margin-bottom: 24px; }
+        .eyebrow {
+            margin: 0 0 8px;
+            color: var(--blue);
+            font-size: 12px;
+            font-weight: 800;
+            letter-spacing: .09em;
+            text-transform: uppercase;
+        }
+        h1 { margin: 0; font-size: clamp(25px, 4vw, 34px); line-height: 1.2; }
+        .intro { max-width: 740px; margin: 10px 0 0; color: var(--muted); }
+
+        .notice {
+            display: flex;
+            gap: 12px;
+            align-items: flex-start;
+            margin: 20px 0 24px;
+            padding: 14px 16px;
+            border: 1px solid #bfdbfe;
+            border-radius: 10px;
+            background: var(--blue-soft);
+            color: #1e3a8a;
+            font-size: 14px;
+        }
+        .notice-icon { font-size: 18px; line-height: 1.3; }
+        .notice strong { display: block; margin-bottom: 2px; }
+
+        .section {
+            margin: 20px 0;
+            padding: 22px;
+            border: 1px solid var(--line);
+            border-radius: 14px;
+            background: var(--surface);
+            box-shadow: var(--shadow);
+        }
+        .section-heading {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 16px;
+            margin-bottom: 6px;
+        }
+        h2 { margin: 0; font-size: 19px; line-height: 1.35; }
+        .section-description { margin: 6px 0 18px; color: var(--muted); font-size: 14px; }
+        .count {
+            flex: 0 0 auto;
+            padding: 4px 10px;
+            border: 1px solid var(--line);
+            border-radius: 999px;
+            background: #f8fafc;
+            color: #475569;
+            font-size: 12px;
+            font-weight: 700;
+        }
+
+        .pending-list { display: grid; gap: 14px; }
+        .pending {
+            overflow: hidden;
+            border: 1px solid #f1d7a8;
+            border-radius: 12px;
+            background: var(--amber-soft);
+        }
+        .inventory-item {
+            padding: 16px 18px;
+            border-bottom: 1px solid #f1d7a8;
+        }
+        .item-label {
+            display: block;
+            margin-bottom: 5px;
+            color: var(--amber);
+            font-size: 11px;
+            font-weight: 800;
+            letter-spacing: .07em;
+            text-transform: uppercase;
+        }
+        .item-title { display: block; font-size: 16px; font-weight: 750; overflow-wrap: anywhere; }
+        .item-meta {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px 16px;
+            margin-top: 9px;
+            color: var(--muted);
+            font-size: 13px;
+        }
+        .item-meta strong { color: #475569; font-weight: 650; }
+
+        .choice-area { padding: 15px 18px 18px; }
+        .choice-label {
+            display: block;
+            margin-bottom: 7px;
+            font-size: 14px;
+            font-weight: 750;
+        }
+        .choice-help { margin: 0 0 10px; color: var(--muted); font-size: 12px; }
+        .select-wrap { position: relative; }
+        select {
+            display: block;
+            width: 100%;
+            min-height: 46px;
+            padding: 10px 38px 10px 12px;
+            border: 1px solid #cbd5e1;
+            border-radius: 8px;
+            appearance: none;
+            background: #fff;
+            color: var(--text);
+            font: inherit;
+            font-size: 14px;
+            cursor: pointer;
+        }
+        select:focus {
+            border-color: var(--blue);
+            outline: 3px solid rgba(37, 99, 235, .16);
+        }
+        .select-wrap::after {
+            position: absolute;
+            top: 50%;
+            right: 15px;
+            color: var(--muted);
+            content: "▾";
+            pointer-events: none;
+            transform: translateY(-55%);
+        }
+        option:disabled { color: #94a3b8; }
+        .selection-feedback {
+            min-height: 20px;
+            margin: 8px 0 0;
+            color: var(--green);
+            font-size: 12px;
+            font-weight: 650;
+        }
+        .selection-feedback.warning { color: var(--amber); }
+
+        .suggestion-list { display: grid; gap: 8px; margin: 12px 0; }
+        .suggestion {
+            position: relative;
+            padding: 11px 112px 11px 12px;
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            background: #fff;
+        }
+        .suggestion-description {
+            margin-bottom: 5px;
+            font-size: 13px;
+            font-weight: 700;
+            overflow-wrap: anywhere;
+        }
+        .suggestion-meta {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px 13px;
+            color: var(--muted);
+            font-size: 11px;
+        }
+        .similarity {
+            position: absolute;
+            top: 11px;
+            right: 10px;
+            max-width: 100px;
+            padding: 4px 7px;
+            border-radius: 999px;
+            background: #eff6ff;
+            color: #1d4ed8;
+            font-size: 10px;
+            font-weight: 750;
+            text-align: center;
+        }
+
+        .no-suggestions {
+            margin: 0;
+            padding: 14px 18px 17px;
+            color: var(--muted);
+            font-size: 13px;
+        }
+        .empty-state {
+            padding: 18px;
+            border: 1px dashed #cbd5e1;
+            border-radius: 10px;
+            color: var(--muted);
+            text-align: center;
+        }
+
+        .tax-section { border-top: 3px solid #94a3b8; }
+        .tax-list { display: grid; gap: 8px; margin: 14px 0 0; padding: 0; list-style: none; }
+        .tax-item {
+            padding: 12px 14px;
+            border: 1px solid var(--line);
+            border-radius: 9px;
+            background: #f8fafc;
+        }
+        .tax-title { display: block; font-size: 14px; font-weight: 700; overflow-wrap: anywhere; }
+        .tax-meta { margin-top: 4px; color: var(--muted); font-size: 12px; }
+
+        .actions {
+            position: sticky;
+            bottom: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 14px;
+            margin-top: 26px;
+            padding: 12px;
+            border: 1px solid var(--line);
+            border-radius: 12px;
+            background: rgba(255, 255, 255, .96);
+            box-shadow: 0 8px 28px rgba(27, 44, 75, .12);
+            backdrop-filter: blur(8px);
+        }
+        .action-summary { padding-left: 6px; color: var(--muted); font-size: 13px; }
+        .action-summary strong { color: var(--text); }
+        .action-buttons { display: flex; gap: 10px; }
+        button, .back {
+            display: inline-flex;
+            min-height: 44px;
+            align-items: center;
+            justify-content: center;
+            border: 0;
+            border-radius: 8px;
+            padding: 10px 16px;
+            font: inherit;
+            font-size: 14px;
+            font-weight: 750;
+            text-decoration: none;
+            cursor: pointer;
+        }
+        button { background: var(--blue); color: #fff; }
+        button:hover { background: var(--blue-dark); }
+        button:focus-visible, .back:focus-visible {
+            outline: 3px solid rgba(37, 99, 235, .3);
+            outline-offset: 2px;
+        }
+        .back { border: 1px solid var(--line); background: #fff; color: #334155; }
+        .back:hover { background: #f8fafc; }
+
+        @media (max-width: 640px) {
+            body { padding: 24px 12px 38px; }
+            .section { padding: 16px; }
+            .section-heading { align-items: center; }
+            .inventory-item { padding: 14px; }
+            .choice-area { padding: 14px; }
+            .suggestion { padding-right: 12px; }
+            .similarity { position: static; display: inline-block; max-width: none; margin-top: 7px; }
+            .actions { position: static; align-items: stretch; flex-direction: column; }
+            .action-summary { padding: 2px 4px; }
+            .action-buttons { flex-direction: column-reverse; }
+            button, .back { width: 100%; }
+        }
+    </style>
+</head>
+<body>
+<main>
+    <header class="hero">
+        <p class="eyebrow">Conferência antes da exportação</p>
+        <h1>Revisar conciliação</h1>
+        <p class="intro">Confira os itens que não tiveram correspondência automática. Você pode confirmar uma sugestão ou deixar o item sem vínculo; nenhuma sugestão será aplicada sem sua escolha.</p>
+    </header>
+
+    <aside class="notice">
+        <span class="notice-icon" aria-hidden="true">ⓘ</span>
+        <div>
+            <strong>As sugestões são baseadas na proximidade textual</strong>
+        O percentual não representa probabilidade de acerto. Confira descrição, quantidade, modelo e data antes de escolher um item físico.
+        </div>
+    </aside>
+
+    <form action="/conciliar/gerar" method="post">
+        <section class="section">
+            <div class="section-heading">
+                <h2>Notas fiscais sem conciliação automática</h2>
+                <span class="count">
+                    <span th:text="${#lists.size(pendenciasNotaFiscal)}">0</span>
+                    <span th:text="${#lists.size(pendenciasNotaFiscal) == 1 ? 'item' : 'itens'}">itens</span>
+                </span>
+            </div>
+            <p class="section-description">Use cada linha fiscal como referência e selecione o item físico correspondente. O mesmo grupo do inventário pode ser usado em mais de uma linha, desde que haja quantidade disponível.</p>
+
+            <div th:if="${#lists.isEmpty(pendenciasNotaFiscal)}" class="empty-state">
+                Todos os itens fiscais tiveram correspondência automática.
+            </div>
+
+            <div class="pending-list" th:if="${not #lists.isEmpty(pendenciasNotaFiscal)}">
+                <article class="pending" th:each="pendencia : ${pendenciasNotaFiscal}">
+                    <div class="inventory-item">
+                        <span class="item-label">Item da nota fiscal</span>
+                        <strong class="item-title" th:text="${pendencia.descricao}">Descrição fiscal</strong>
+                        <div class="item-meta">
+                            <span><strong>NF:</strong> <span th:text="${#strings.isEmpty(pendencia.numeroNotaFiscal) ? '-' : pendencia.numeroNotaFiscal}">-</span></span>
+                            <span><strong>Qtd. fiscal:</strong> <span th:text="${pendencia.quantidade == null ? 'Não identificada' : pendencia.quantidade}">-</span></span>
+                            <span><strong>Emissão:</strong> <span th:text="${pendencia.dataEmissaoFormatada}">Não identificada</span></span>
+                            <span><strong>Arquivo:</strong> <span th:text="${#strings.isEmpty(pendencia.nomeArquivo) ? '-' : pendencia.nomeArquivo}">-</span></span>
+                        </div>
+                    </div>
+
+                    <div class="choice-area" th:if="${not #lists.isEmpty(pendencia.sugestoes)}">
+                        <label class="choice-label" th:for="'associacao-' + ${pendencia.indiceNotaFiscal}">
+                            Possível item do inventário
+                        </label>
+                        <div class="suggestion-list">
+                            <article class="suggestion" th:each="sugestao : ${pendencia.sugestoes}">
+                                <div class="suggestion-description" th:text="${sugestao.descricao}">Descrição fiscal</div>
+                                <div class="suggestion-meta">
+                                    <span><strong>Código(s):</strong> <span th:text="${#strings.isEmpty(sugestao.codigo) ? '-' : sugestao.codigo}">-</span></span>
+                                    <span><strong>Estado:</strong> <span th:text="${#strings.isEmpty(sugestao.estado) ? '-' : sugestao.estado}">-</span></span>
+                                    <span><strong>Qtd. física disponível:</strong> <span th:text="${sugestao.quantidadeDisponivel}">0</span></span>
+                                </div>
+                                <span class="similarity"
+                                      th:text="'Similaridade textual ' + ${#numbers.formatDecimal(sugestao.similaridade * 100, 1, 0)} + '%'">Similaridade textual 0%</span>
+                                <div class="remaining-quantity"
+                                     th:data-inventario-id="${sugestao.indiceInventario}"
+                                     th:data-disponivel="${sugestao.quantidadeDisponivel}">
+                                    Saldo após escolhas: <strong th:text="${sugestao.quantidadeDisponivel}">0</strong>
+                                </div>
+                            </article>
+                        </div>
+                        <p class="choice-help">O saldo é reservado pela quantidade fiscal selecionada. O mesmo grupo físico pode atender outras linhas se ainda houver unidades disponíveis.</p>
+                        <div class="select-wrap">
+                            <select class="association-select" name="associacoes"
+                                    th:id="'associacao-' + ${pendencia.indiceNotaFiscal}"
+                                    th:data-quantidade-fiscal="${pendencia.quantidade == null ? 0 : pendencia.quantidade}">
+                                <option value="">Não associar — manter sem item físico</option>
+                                <option th:each="sugestao : ${pendencia.sugestoes}"
+                                        th:value="${sugestao.indiceInventario} + ':' + ${pendencia.indiceNotaFiscal}"
+                                        th:text="${sugestao.descricao} + ' | Código(s) ' + (${#strings.isEmpty(sugestao.codigo) ? '-' : sugestao.codigo}) + ' | Estado ' + (${#strings.isEmpty(sugestao.estado) ? '-' : sugestao.estado}) + ' | Qtd. física ' + ${sugestao.quantidadeDisponivel}"
+                                        th:data-inventario-id="${sugestao.indiceInventario}"
+                                        th:data-disponivel="${sugestao.quantidadeDisponivel}">Sugestão de item físico</option>
+                            </select>
+                        </div>
+                        <p class="selection-feedback" aria-live="polite"></p>
+                    </div>
+                    <p class="no-suggestions" th:if="${#lists.isEmpty(pendencia.sugestoes)}">
+                        Não encontramos itens físicos disponíveis e suficientemente próximos. Esta linha continuará como <strong>ITEM APENAS NA NF</strong>.
+                    </p>
+                </article>
+            </div>
+        </section>
+
+        <section class="section tax-section">
+            <div class="section-heading">
+                <h2>Saldos físicos sem NF</h2>
+                <span class="count">
+                    <span th:text="${#lists.size(saldosFisicosSemNota)}">0</span>
+                    <span th:text="${#lists.size(saldosFisicosSemNota) == 1 ? 'item' : 'itens'}">itens</span>
+                </span>
+            </div>
+            <p class="section-description">Quantidade física ainda não associada automaticamente, antes das escolhas manuais.</p>
+            <p th:if="${#lists.isEmpty(saldosFisicosSemNota)}" class="empty-state">
+                Não há saldo físico sem NF.
+            </p>
+            <ul class="tax-list" th:if="${not #lists.isEmpty(saldosFisicosSemNota)}">
+                <li class="tax-item" th:each="item : ${saldosFisicosSemNota}">
+                    <strong class="tax-title" th:text="${item.descricaoInventario}">Descrição inventário</strong>
+                    <div class="tax-meta">
+                        Código(s): <span th:text="${#strings.isEmpty(item.codigo) ? '-' : item.codigo}">-</span>
+                        &bull; Quantidade física: <span th:text="${item.quantidadeInventario}">0</span>
+                        &bull; Estado: <span th:text="${#strings.isEmpty(item.estado) ? '-' : item.estado}">-</span>
+                    </div>
+                </li>
+            </ul>
+        </section>
+
+        <footer class="actions">
+            <div class="action-summary">
+                <strong id="selection-count">0 itens associados manualmente</strong>
+                <span> — os demais permanecerão sem vínculo.</span>
+            </div>
+            <div class="action-buttons">
+                <a class="back" href="/">Voltar</a>
+                <button type="submit">Gerar relatório Excel</button>
+            </div>
+        </footer>
+    </form>
+</main>
+<script>
+    const seletores = Array.from(document.querySelectorAll(".association-select"));
+    const contador = document.getElementById("selection-count");
+
+    function atualizarSelecoes() {
+        const quantidadePorGrupo = new Map();
+        seletores.forEach((seletor) => {
+            const opcao = seletor.selectedOptions[0];
+            if (!opcao?.dataset.inventarioId) return;
+            const grupoId = opcao.dataset.inventarioId;
+            const quantidade = Number(seletor.dataset.quantidadeFiscal);
+            quantidadePorGrupo.set(grupoId, (quantidadePorGrupo.get(grupoId) || 0) + quantidade);
+        });
+
+        document.querySelectorAll(".remaining-quantity[data-inventario-id]").forEach((saldo) => {
+            const reservado = quantidadePorGrupo.get(saldo.dataset.inventarioId) || 0;
+            const disponivel = Number(saldo.dataset.disponivel);
+            saldo.querySelector("strong").textContent = String(Math.max(0, disponivel - reservado));
+        });
+
+        seletores.forEach((seletor) => {
+            const escolhida = seletor.selectedOptions[0];
+            const quantidadeAtual = Number(seletor.dataset.quantidadeFiscal);
+            seletor.querySelectorAll("option[data-inventario-id]").forEach((opcao) => {
+                const grupoId = opcao.dataset.inventarioId;
+                const quantidadeSelecionada = quantidadePorGrupo.get(grupoId) || 0;
+                const quantidadeDaOpcaoAtual = escolhida?.dataset.inventarioId === grupoId
+                    ? quantidadeAtual
+                    : 0;
+                const restanteParaOpcao = Number(opcao.dataset.disponivel)
+                    - quantidadeSelecionada + quantidadeDaOpcaoAtual;
+                opcao.disabled = quantidadeAtual <= 0
+                    || restanteParaOpcao + 0.000001 < quantidadeAtual;
+            });
+
+            const feedback = seletor.closest(".choice-area").querySelector(".selection-feedback");
+            feedback.classList.remove("warning");
+            if (escolhida?.dataset.inventarioId) {
+                const restante = Number(escolhida.dataset.disponivel)
+                    - (quantidadePorGrupo.get(escolhida.dataset.inventarioId) || 0);
+                feedback.textContent = `Associação manual selecionada. Saldo físico restante do grupo: ${Math.max(0, restante)}.`;
+            } else {
+                feedback.textContent = "Nenhuma sugestão selecionada; esta linha fiscal ficará sem vínculo.";
+            }
+        });
+
+        const quantidade = seletores.filter((seletor) =>
+            Boolean(seletor.selectedOptions[0]?.dataset.inventarioId)
+        ).length;
+        contador.textContent = quantidade === 1
+            ? "1 item associado manualmente"
+            : `${quantidade} itens associados manualmente`;
+    }
+
+    seletores.forEach((seletor) => {
+        seletor.addEventListener("change", atualizarSelecoes);
+    });
+
+    atualizarSelecoes();
+</script>
+</body>
+</html>

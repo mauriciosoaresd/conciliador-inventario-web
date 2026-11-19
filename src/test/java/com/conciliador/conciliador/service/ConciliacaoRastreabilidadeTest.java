@@ -3,34 +3,17 @@ package com.conciliador.conciliador.service;
 import com.conciliador.conciliador.model.ItemNotaFiscal;
 import com.conciliador.conciliador.model.ProdutoInventario;
 import com.conciliador.conciliador.model.ResultadoConciliacao;
-import com.conciliador.conciliador.repository.SinonimoDinamicoRepository;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.mockito.InjectMocks;
-import org.mockito.Mock;
-import org.mockito.MockitoAnnotations;
 
 import java.util.Collections;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.when;
 
 class ConciliacaoRastreabilidadeTest {
 
-    @Mock
-    private SinonimoDinamicoRepository sinonimoRepository;
-
-    @InjectMocks
-    private ConciliacaoService conciliacaoService;
-
-    @BeforeEach
-    void setUp() {
-        MockitoAnnotations.openMocks(this);
-        // Simula que não há sinônimos dinâmicos cadastrados para simplificar o teste
-        when(sinonimoRepository.findAll()).thenReturn(Collections.emptyList());
-    }
+    private final ConciliacaoService conciliacaoService = new ConciliacaoService();
 
     @Test
     @DisplayName("Deve preencher corretamente o número da nota fiscal e o nome do arquivo de origem no resultado da conciliação")

@@ -171,10 +171,10 @@
 <div class="container">
     <div class="header">
         <h2>Conciliação Inteligente</h2>
-        <p>Motor Híbrido com Stemming, Levenshtein e OCR</p>
+        <p>Concilie automaticamente e revise sugestões antes de gerar o Excel</p>
     </div>
 
-    <form id="formConciliacao" enctype="multipart/form-data">
+    <form id="formConciliacao" action="/conciliar/revisao" method="post" enctype="multipart/form-data">
         <div class="form-group">
             <label for="inventario">Planilha de Inventário (.CSV)</label>
             <div class="file-drop-area">
@@ -189,9 +189,9 @@
             </div>
         </div>
 
-        <button type="submit" id="btnProcessar">Executar Conciliação</button>
+        <button type="submit" id="btnProcessar">Analisar e revisar conciliação</button>
 
-        <div id="loadingIndicator">⚡ A processar motor híbrido, a rastrear NFs e a gerar relatório Excel...</div>
+        <div id="loadingIndicator">⚡ A processar os arquivos e buscar possíveis correspondências...</div>
     </form>
 
     <div class="footer-note">
@@ -200,51 +200,12 @@
 </div>
 
 <script>
-    document.getElementById("formConciliacao").addEventListener("submit", async function(event) {
-        event.preventDefault();
-        event.stopPropagation();
-
+    document.getElementById("formConciliacao").addEventListener("submit", function() {
         const botao = document.getElementById("btnProcessar");
         const loadingDiv = document.getElementById("loadingIndicator");
-
         botao.disabled = true;
         botao.innerText = "A processar...";
         loadingDiv.style.display = "block";
-
-        try {
-            const formData = new FormData(this);
-
-            const response = await fetch('/conciliar', {
-                method: 'POST',
-                body: formData
-            });
-
-            if (!response.ok) {
-                const errorBody = await response.json().catch(() => null);
-                throw new Error(errorBody && errorBody.error
-                    ? errorBody.error
-                    : "Erro no servidor ao processar a conciliação.");
-            }
-
-            const blob = await response.blob();
-            const url = window.URL.createObjectURL(blob);
-
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = "relatorio-conciliacao-hibrido.xlsx";
-            document.body.appendChild(a);
-            a.click();
-            a.remove();
-
-            window.URL.revokeObjectURL(url);
-
-        } catch (error) {
-            alert("Ocorreu um erro: " + error.message);
-        } finally {
-            botao.disabled = false;
-            botao.innerText = "Executar Conciliação";
-            loadingDiv.style.display = "none";
-        }
     });
 </script>
 

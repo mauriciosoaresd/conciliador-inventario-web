@@ -1,5 +1,7 @@
 package com.conciliador.conciliador.model;
 
+import java.time.LocalDate;
+
 public class ItemNotaFiscal {
     private String cnpjEmitente;
     private String numeroNota;
@@ -10,6 +12,7 @@ public class ItemNotaFiscal {
     private double valorUnitario;
     private String nomeArquivoOrigem;
     private String identificadorDocumentoOrigem;
+    private LocalDate dataEmissao;
 
     // Getters e Setters
     public String getCnpjEmitente() { return cnpjEmitente; }
@@ -38,6 +41,9 @@ public class ItemNotaFiscal {
 
     public String getIdentificadorDocumentoOrigem() { return identificadorDocumentoOrigem; }
     public void setIdentificadorDocumentoOrigem(String identificadorDocumentoOrigem) { this.identificadorDocumentoOrigem = identificadorDocumentoOrigem; }
+
+    public LocalDate getDataEmissao() { return dataEmissao; }
+    public void setDataEmissao(LocalDate dataEmissao) { this.dataEmissao = dataEmissao; }
 
     @Override
     public String toString() {
