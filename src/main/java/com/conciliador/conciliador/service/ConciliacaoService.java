@@ -44,6 +44,13 @@ public class ConciliacaoService {
             "preto", "preta", "branco", "branca", "cinza", "grafite",
             "vermelho", "vermelha", "amarelo", "amarela"
     );
+    private static final Set<String> TERMOS_SEM_PESO_PARA_SUGESTAO = Set.of(
+            "a", "ao", "aos", "as", "com", "da", "das", "de", "do", "dos",
+            "e", "em", "na", "nas", "no", "nos", "o", "os", "para", "por",
+            "un", "pol", "mm", "cm", "m", "ferro", "carbono", "aco", "metal",
+            "mdf", "mdp", "madeira", "preto", "preta", "branco", "branca",
+            "cinza", "grafite", "vermelho", "vermelha", "amarelo", "amarela"
+    );
     @Value("${conciliador.conciliacao.tolerancia-medida-cm:2}")
     private double toleranciaMedidaCm = 2;
     @Value("${conciliador.conciliacao.limite-similaridade-confirmada:0.35}")
@@ -275,7 +282,7 @@ public class ConciliacaoService {
                             inventario,
                             correspondenciasPorGrupo.getOrDefault(indiceGrupo, List.of())
                     );
-                    if (quantidadeRestante + 0.000001 < item.getQuantidade()) continue;
+                    if (quantidadeRestante <= 0.000001) continue;
 
                     AvaliacaoIdentidade identidade = avaliarIdentidade(
                             inventario.getProdutoBase(),
@@ -294,7 +301,13 @@ public class ConciliacaoService {
                                     inventario.getProdutoBase().getModelo()
                             )
                     );
-                    if (similaridade < limiteSimilaridadeSugestao) continue;
+                    if (similaridade < limiteSimilaridadeSugestao
+                            || !compartilhaTermoCaracteristico(
+                                    descricaoCompleta(inventario.getProdutoBase()),
+                                    item.getDescricaoProduto()
+                            )) {
+                        continue;
+                    }
 
                     sugestoes.add(new SugestaoInventario(
                             indiceGrupo,
@@ -371,16 +384,19 @@ public class ConciliacaoService {
                     ignorado -> new ArrayList<>()
             );
             double quantidadeFisicaRestante = quantidadeDisponivelPorGrupo.get(associacao.indiceInventario());
-            if (item.getQuantidade() > quantidadeFisicaRestante + 0.000001) {
+            if (quantidadeFisicaRestante <= 0.000001) {
                 throw new RequisicaoInvalidaException(
-                        "A quantidade selecionada excede o saldo físico disponível para esse item."
+                        "Não há saldo físico disponível para essa associação manual."
                 );
             }
 
             correspondenciasGrupo.add(new ItemComStatus(item, "CONCILIADO MANUALMENTE"));
             quantidadeDisponivelPorGrupo.put(
                     associacao.indiceInventario(),
-                    subtrairQuantidade(quantidadeFisicaRestante, item.getQuantidade())
+                    subtrairQuantidade(
+                            quantidadeFisicaRestante,
+                            Math.min(quantidadeFisicaRestante, item.getQuantidade())
+                    )
             );
             indicesItensNotaConsumidos.add(associacao.indiceNotaFiscal());
         }
@@ -394,6 +410,25 @@ public class ConciliacaoService {
                 descricaoInventario,
                 descricaoNota
         ) * 0.3);
+    }
+
+    private boolean compartilhaTermoCaracteristico(String descricaoInventario, String descricaoNota) {
+        Set<String> termosInventario = extrairTermosCaracteristicos(descricaoInventario);
+        termosInventario.retainAll(extrairTermosCaracteristicos(descricaoNota));
+        return !termosInventario.isEmpty();
+    }
+
+    private Set<String> extrairTermosCaracteristicos(String descricao) {
+        Set<String> termos = new HashSet<>();
+        for (String token : MatchUtils.normalizar(descricao).split("\\s+")) {
+            if (token.length() <= 2
+                    || token.chars().anyMatch(Character::isDigit)
+                    || TERMOS_SEM_PESO_PARA_SUGESTAO.contains(token)) {
+                continue;
+            }
+            termos.add(MatchUtils.aplicarStemming(token));
+        }
+        return termos;
     }
 
     private double calcularQuantidadeFisicaRestante(
