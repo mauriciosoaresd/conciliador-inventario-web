@@ -348,7 +348,7 @@
                                 </div>
                             </article>
                         </div>
-                        <p class="choice-help">O saldo é reservado pela quantidade fiscal selecionada. O mesmo grupo físico pode atender outras linhas se ainda houver unidades disponíveis.</p>
+                        <p class="choice-help">O mesmo grupo pode atender várias linhas. Se houver menos unidades físicas que a quantidade fiscal, o saldo disponível será alocado e a falta aparecerá no Excel.</p>
                         <div class="select-wrap">
                             <select class="association-select" name="associacoes"
                                     th:id="'associacao-' + ${pendencia.indiceNotaFiscal}"
@@ -411,42 +411,59 @@
     const contador = document.getElementById("selection-count");
 
     function atualizarSelecoes() {
-        const quantidadePorGrupo = new Map();
+        const saldoPorGrupo = new Map();
+        const alocadoPorGrupo = new Map();
+        const alocadoPorSeletor = new Map();
+        const avisos = new Map();
         seletores.forEach((seletor) => {
-            const opcao = seletor.selectedOptions[0];
-            if (!opcao?.dataset.inventarioId) return;
-            const grupoId = opcao.dataset.inventarioId;
-            const quantidade = Number(seletor.dataset.quantidadeFiscal);
-            quantidadePorGrupo.set(grupoId, (quantidadePorGrupo.get(grupoId) || 0) + quantidade);
+            const quantidadeAtual = Number(seletor.dataset.quantidadeFiscal);
+            const escolhida = seletor.selectedOptions[0];
+
+            seletor.querySelectorAll("option[data-inventario-id]").forEach((opcao) => {
+                const grupoId = opcao.dataset.inventarioId;
+                if (!saldoPorGrupo.has(grupoId)) {
+                    saldoPorGrupo.set(grupoId, Number(opcao.dataset.disponivel));
+                }
+                const restanteParaOpcao = saldoPorGrupo.get(grupoId);
+                opcao.disabled = quantidadeAtual <= 0
+                    || restanteParaOpcao <= 0.000001;
+            });
+
+            if (escolhida?.dataset.inventarioId) {
+                const grupoId = escolhida.dataset.inventarioId;
+                const saldo = saldoPorGrupo.get(grupoId) || 0;
+                const quantidadeAlocada = Math.min(quantidadeAtual, saldo);
+                if (quantidadeAlocada <= 0.000001) {
+                    seletor.value = "";
+                    avisos.set(seletor, "O saldo deste grupo foi usado por uma associação anterior; escolha outra opção.");
+                    return;
+                }
+                saldoPorGrupo.set(grupoId, Math.max(0, saldo - quantidadeAlocada));
+                alocadoPorGrupo.set(grupoId, (alocadoPorGrupo.get(grupoId) || 0) + quantidadeAlocada);
+                alocadoPorSeletor.set(seletor, quantidadeAlocada);
+            }
         });
 
         document.querySelectorAll(".remaining-quantity[data-inventario-id]").forEach((saldo) => {
-            const reservado = quantidadePorGrupo.get(saldo.dataset.inventarioId) || 0;
+            const alocado = alocadoPorGrupo.get(saldo.dataset.inventarioId) || 0;
             const disponivel = Number(saldo.dataset.disponivel);
-            saldo.querySelector("strong").textContent = String(Math.max(0, disponivel - reservado));
+            saldo.querySelector("strong").textContent = String(Math.max(0, disponivel - alocado));
         });
 
         seletores.forEach((seletor) => {
-            const escolhida = seletor.selectedOptions[0];
-            const quantidadeAtual = Number(seletor.dataset.quantidadeFiscal);
-            seletor.querySelectorAll("option[data-inventario-id]").forEach((opcao) => {
-                const grupoId = opcao.dataset.inventarioId;
-                const quantidadeSelecionada = quantidadePorGrupo.get(grupoId) || 0;
-                const quantidadeDaOpcaoAtual = escolhida?.dataset.inventarioId === grupoId
-                    ? quantidadeAtual
-                    : 0;
-                const restanteParaOpcao = Number(opcao.dataset.disponivel)
-                    - quantidadeSelecionada + quantidadeDaOpcaoAtual;
-                opcao.disabled = quantidadeAtual <= 0
-                    || restanteParaOpcao + 0.000001 < quantidadeAtual;
-            });
-
             const feedback = seletor.closest(".choice-area").querySelector(".selection-feedback");
-            feedback.classList.remove("warning");
+            feedback.classList.toggle("warning", avisos.has(seletor));
+            if (avisos.has(seletor)) {
+                feedback.textContent = avisos.get(seletor);
+                return;
+            }
+            const escolhida = seletor.selectedOptions[0];
+            const quantidadeAlocada = alocadoPorSeletor.get(seletor) || 0;
             if (escolhida?.dataset.inventarioId) {
-                const restante = Number(escolhida.dataset.disponivel)
-                    - (quantidadePorGrupo.get(escolhida.dataset.inventarioId) || 0);
-                feedback.textContent = `Associação manual selecionada. Saldo físico restante do grupo: ${Math.max(0, restante)}.`;
+                const quantidadeFiscal = Number(seletor.dataset.quantidadeFiscal);
+                feedback.textContent = quantidadeAlocada < quantidadeFiscal
+                    ? `Associação manual selecionada: ${quantidadeAlocada} de ${quantidadeFiscal} unidades físicas; a falta será indicada no Excel.`
+                    : `Associação manual selecionada: ${quantidadeAlocada} unidades físicas.`;
             } else {
                 feedback.textContent = "Nenhuma sugestão selecionada; esta linha fiscal ficará sem vínculo.";
             }

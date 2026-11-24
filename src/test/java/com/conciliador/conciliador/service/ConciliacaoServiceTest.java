@@ -3,7 +3,6 @@ package com.conciliador.conciliador.service;
 import com.conciliador.conciliador.model.ItemNotaFiscal;
 import com.conciliador.conciliador.model.ProdutoInventario;
 import com.conciliador.conciliador.model.ResultadoConciliacao;
-import com.conciliador.conciliador.exception.RequisicaoInvalidaException;
 import org.junit.jupiter.api.Test;
 
 import java.time.LocalDate;
@@ -12,7 +11,6 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ConciliacaoServiceTest {
@@ -58,7 +56,7 @@ class ConciliacaoServiceTest {
         ItemNotaFiscal sugestaoManual = item("NF-2", "Cadeira", 2.0);
         sugestaoManual.setIdentificadorDocumentoOrigem("documento-2");
         List<ProdutoInventario> inventario = List.of(
-                produto("SKU-1", "Cadeira executiva ergonomica com apoio lombar", 5.0)
+                produto("SKU-1", "Cadeira executiva ergonomica com apoio lombar", 4.0)
         );
         List<ItemNotaFiscal> itensNota = List.of(conciliacaoAutomatica, sugestaoManual);
 
@@ -69,6 +67,7 @@ class ConciliacaoServiceTest {
         assertEquals(2.0, analise.pendencias().get(0).quantidade());
         assertEquals("Cadeira", analise.pendencias().get(0).descricao());
         assertEquals("SKU-1", analise.pendencias().get(0).sugestoes().get(0).codigo());
+        assertEquals(1.0, analise.pendencias().get(0).sugestoes().get(0).quantidadeDisponivel());
 
         List<ResultadoConciliacao> resultados = conciliacaoService.analisarConciliacao(
                 inventario,
@@ -82,8 +81,8 @@ class ConciliacaoServiceTest {
         assertEquals(2, resultados.size());
         assertEquals("OK", resultados.get(0).getStatus());
         assertEquals(3.0, resultados.get(0).getQuantidadeInventario());
-        assertEquals("CONCILIADO MANUALMENTE", resultados.get(1).getStatus());
-        assertEquals(2.0, resultados.get(1).getQuantidadeInventario());
+        assertEquals("CONCILIADO MANUALMENTE — FALTANDO NO FÍSICO", resultados.get(1).getStatus());
+        assertEquals(1.0, resultados.get(1).getQuantidadeInventario());
         assertEquals(2.0, resultados.get(1).getQuantidadeNotaFiscal());
     }
 
@@ -143,21 +142,50 @@ class ConciliacaoServiceTest {
     }
 
     @Test
-    void deveRejeitarAssociacoesManuaisQueExcedemSaldoFisico() {
+    void deveAlocarSaldoParcialNasAssociacoesManuaisQuandoFaltaQuantidadeFisica() {
         List<ProdutoInventario> inventario = List.of(produto("TEL-1", "Telefone IP generico", 4.0));
         List<ItemNotaFiscal> itensNota = List.of(
                 item("NF-1", "Telefone IP Grandstream GXP1625", 3.0),
                 item("NF-2", "Telefone IP Grandstream GXP1610", 3.0)
         );
 
-        assertThrows(RequisicaoInvalidaException.class, () -> conciliacaoService.analisarConciliacao(
+        List<ResultadoConciliacao> resultados = conciliacaoService.analisarConciliacao(
                 inventario,
                 itensNota,
                 List.of(
                         new ConciliacaoService.AssociacaoManual(0, 0),
                         new ConciliacaoService.AssociacaoManual(0, 1)
                 )
-        ));
+        ).resultados();
+
+        assertEquals(2, resultados.size());
+        assertEquals("CONCILIADO MANUALMENTE", resultados.get(0).getStatus());
+        assertEquals(3.0, resultados.get(0).getQuantidadeInventario());
+        assertEquals("CONCILIADO MANUALMENTE — FALTANDO NO FÍSICO", resultados.get(1).getStatus());
+        assertEquals(1.0, resultados.get(1).getQuantidadeInventario());
+        assertEquals(3.0, resultados.get(1).getQuantidadeNotaFiscal());
+    }
+
+    @Test
+    void naoDeveSugerirCadeirasParaUmaMesaMesmoQuandoCompartilhamCor() {
+        List<ProdutoInventario> inventario = List.of(
+                produto("CAD-1", "Cadeira Diretor Preta", 1.0),
+                produto("CAD-2", "Cadeira Tecido Preta", 1.0),
+                produto("CAD-3", "Cadeira Tecido Preta", 1.0),
+                produto("MES-1", "Mesa em L MDF", 1.0)
+        );
+        ItemNotaFiscal mesa = item(
+                "NF-MESA",
+                "MESA em L 2,40X1,00M MDF 18MM Preta",
+                1.0
+        );
+
+        ConciliacaoService.AnaliseConciliacao analise =
+                conciliacaoService.analisarConciliacao(inventario, List.of(mesa));
+
+        assertEquals(1, analise.pendencias().size());
+        assertEquals(1, analise.pendencias().get(0).sugestoes().size());
+        assertEquals("Mesa em L MDF", analise.pendencias().get(0).sugestoes().get(0).descricao());
     }
 
     @Test
@@ -974,6 +1002,44 @@ class ConciliacaoServiceTest {
         assertEquals(2, resultados.size());
         assertEquals("OK", resultados.get(0).getStatus());
         assertEquals("SEM NF CORRESPONDENTE", resultados.get(1).getStatus());
+    }
+
+    @Test
+    void deveDeixarItemFiscalSemQuantidadeSemVinculoAoInventario() {
+        List<ProdutoInventario> inventario = List.of(
+                produto("INV-1", "Cadeira Ergonomica 120x60", 2.0)
+        );
+        ItemNotaFiscal itemSemQuantidade = item("NF-1", "Cadeira Ergonomica 120x60", 0.0);
+        itemSemQuantidade.setQuantidade(null);
+
+        ConciliacaoService.AnaliseConciliacao analise =
+                conciliacaoService.analisarConciliacao(inventario, List.of(itemSemQuantidade));
+
+        ResultadoConciliacao itemSemVinculo = analise.resultados().stream()
+                .filter(resultado -> resultado.getDescricaoNotaFiscal() != null
+                        && resultado.getDescricaoNotaFiscal().equals("Cadeira Ergonomica 120x60"))
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("item fiscal sem quantidade não apareceu na planilha"));
+        assertEquals("ITEM APENAS NA NF (NÃO ENCONTRADO NO FÍSICO)", itemSemVinculo.getStatus());
+        assertNull(itemSemVinculo.getQuantidadeNotaFiscal());
+        assertTrue(analise.resultados().stream()
+                .anyMatch(resultado -> resultado.getStatus().equals("SEM NF CORRESPONDENTE")));
+    }
+
+    @Test
+    void deveConciliarItemFiscalComQuantidadePositivaIdentificada() {
+        List<ProdutoInventario> inventario = List.of(
+                produto("INV-1", "Cadeira Ergonomica 120x60", 2.0)
+        );
+        ItemNotaFiscal itemComQuantidade = item("NF-1", "Cadeira Ergonomica 120x60", 2.0);
+
+        List<ResultadoConciliacao> resultados = conciliacaoService.analisarConciliacao(
+                inventario, List.of(itemComQuantidade)).resultados();
+
+        assertEquals(1, resultados.size());
+        assertEquals("OK", resultados.get(0).getStatus());
+        assertEquals(2.0, resultados.get(0).getQuantidadeInventario());
+        assertEquals(2.0, resultados.get(0).getQuantidadeNotaFiscal());
     }
 
     private ProdutoInventario produtoComDetalhes(
