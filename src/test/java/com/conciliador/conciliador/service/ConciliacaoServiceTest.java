@@ -1004,6 +1004,44 @@ class ConciliacaoServiceTest {
         assertEquals("SEM NF CORRESPONDENTE", resultados.get(1).getStatus());
     }
 
+    @Test
+    void deveDeixarItemFiscalSemQuantidadeSemVinculoAoInventario() {
+        List<ProdutoInventario> inventario = List.of(
+                produto("INV-1", "Cadeira Ergonomica 120x60", 2.0)
+        );
+        ItemNotaFiscal itemSemQuantidade = item("NF-1", "Cadeira Ergonomica 120x60", 0.0);
+        itemSemQuantidade.setQuantidade(null);
+
+        ConciliacaoService.AnaliseConciliacao analise =
+                conciliacaoService.analisarConciliacao(inventario, List.of(itemSemQuantidade));
+
+        ResultadoConciliacao itemSemVinculo = analise.resultados().stream()
+                .filter(resultado -> resultado.getDescricaoNotaFiscal() != null
+                        && resultado.getDescricaoNotaFiscal().equals("Cadeira Ergonomica 120x60"))
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("item fiscal sem quantidade não apareceu na planilha"));
+        assertEquals("ITEM APENAS NA NF (NÃO ENCONTRADO NO FÍSICO)", itemSemVinculo.getStatus());
+        assertNull(itemSemVinculo.getQuantidadeNotaFiscal());
+        assertTrue(analise.resultados().stream()
+                .anyMatch(resultado -> resultado.getStatus().equals("SEM NF CORRESPONDENTE")));
+    }
+
+    @Test
+    void deveConciliarItemFiscalComQuantidadePositivaIdentificada() {
+        List<ProdutoInventario> inventario = List.of(
+                produto("INV-1", "Cadeira Ergonomica 120x60", 2.0)
+        );
+        ItemNotaFiscal itemComQuantidade = item("NF-1", "Cadeira Ergonomica 120x60", 2.0);
+
+        List<ResultadoConciliacao> resultados = conciliacaoService.analisarConciliacao(
+                inventario, List.of(itemComQuantidade)).resultados();
+
+        assertEquals(1, resultados.size());
+        assertEquals("OK", resultados.get(0).getStatus());
+        assertEquals(2.0, resultados.get(0).getQuantidadeInventario());
+        assertEquals(2.0, resultados.get(0).getQuantidadeNotaFiscal());
+    }
+
     private ProdutoInventario produtoComDetalhes(
             String codigo,
             String descricao,

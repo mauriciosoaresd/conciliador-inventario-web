@@ -153,7 +153,12 @@ public class ConciliacaoService {
                         && similaridade >= limiteSimilaridadeConfirmada) {
                     revisaoManual = false;
                 }
-                if (!revisaoManual && (similaridade >= 0.30 || !identidade.revisaoManual())) {
+                // Itens fiscais sem quantidade válida (null, zero ou negativa) não podem ser
+                // alocados: permanecem sem vínculo e aparecem como "ITEM APENAS NA NF".
+                if (!revisaoManual
+                        && item.getQuantidade() != null
+                        && item.getQuantidade() > 0
+                        && (similaridade >= 0.30 || !identidade.revisaoManual())) {
                     candidatos.add(new CandidatoAssociacao(
                             indiceGrupo,
                             indiceItem,
